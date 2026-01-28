@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::error::Error;
+use std::fmt;
 
 /// Generic subscribe request for WebSocket feeds
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -81,4 +83,26 @@ pub struct MarketData {
 
     /// Number of units at ask
     pub ask_size: f64,
+}
+
+pub enum MsgError {
+    ReadError(String),
+    SendError(String),
+}
+
+impl Error for MsgError {}
+
+impl fmt::Display for MsgError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::ReadError(e) => write!(f, "Error reading message: {}", e),
+            Self::SendError(e) => write!(f, "Error sending message: {}", e),
+        }
+    }
+}
+
+impl fmt::Debug for MsgError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self)
+    }
 }

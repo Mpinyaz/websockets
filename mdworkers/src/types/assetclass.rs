@@ -1,6 +1,6 @@
 use core::fmt;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub enum AssetClass {
     Crypto,
     Forex,
@@ -14,5 +14,10 @@ impl fmt::Display for AssetClass {
             AssetClass::Forex => write!(f, "fx"),
             AssetClass::Equity => write!(f, "iex"),
         }
+    }
+}
+impl fmt::Debug for AssetClass {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }

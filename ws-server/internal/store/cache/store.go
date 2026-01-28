@@ -24,8 +24,8 @@ var ErrNil = errors.New("no matching record found in redis database")
 
 func NewRedisClient(cfg *Config) (*RedisStore, error) {
 	client := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs:    cfg.RedisAddrs,
-		Password: cfg.RedisPassword,
+		Addrs: cfg.RedisAddrs,
+		// Password: cfg.RedisPassword,
 		PoolSize: 50,
 	})
 
@@ -36,6 +36,10 @@ func NewRedisClient(cfg *Config) (*RedisStore, error) {
 	return &RedisStore{
 		Client: client,
 	}, nil
+}
+
+func (r *RedisStore) Close() error {
+	return r.Client.Close()
 }
 
 func (r *RedisStore) Run() {

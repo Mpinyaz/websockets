@@ -6,9 +6,10 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use tracing::{error, info};
 
-type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
+pub type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 pub struct Client {
+    pub api_key: String,
     pub fx_ws: Option<WsStream>,
     pub crypto_ws: Option<WsStream>,
     pub equity_ws: Option<WsStream>,
@@ -39,11 +40,13 @@ impl fmt::Debug for ClientError {
 impl Error for ClientError {}
 
 impl Client {
-    async fn connect(cfg: &Config, ac: AssetClass) -> Result<WsStream> {
+    async fn connect(cfg: &Config, ac: AssetClass) -> Result<WsStream, ClientError> {
         let url = format!("{}/{}", cfg.url, ac);
         info!("Connecting to WebSocket at: {}", url);
 
-        let (ws_stream, response) = connect_async(&url).await?;
+        let (ws_stream, response) = connect_async(&url)
+            .await
+            .map_err(|err| ClientError::ConnectionFailed(err.to_string()))?;
 
         info!(
             "WebSocket connection established for {:?}. Response: {:?}",
@@ -54,7 +57,7 @@ impl Client {
         Ok(ws_stream)
     }
 
-    pub async fn new(cfg: &Config) -> Result<Self> {
+    pub async fn new(cfg: &Config) -> Result<Self, ClientError> {
         info!("Initializing Client with all WebSocket connections");
 
         let fx_ws = match Self::connect(cfg, AssetClass::Forex).await {
@@ -82,6 +85,7 @@ impl Client {
         };
 
         Ok(Client {
+            api_key: cfg.api_key.clone(),
             fx_ws,
             crypto_ws,
             equity_ws,

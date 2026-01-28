@@ -1,15 +1,12 @@
-package api
+package core
 
 import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"sync"
 	"time"
-
-	. "websockets/internal/core"
 
 	"github.com/gorilla/websocket"
 )
@@ -40,7 +37,7 @@ type TiingoResponse struct {
 }
 
 // TiingoForexData parsed forex quote data
-// Array format: [type, ticker, timestamp, bidSize, bidPrice, midPrice, askSize, askPrice]
+// Array format: [type, ticker, timestamp, bidSize, bidPrice, midPrice, askPrice, askSize]
 type TiingoForexData struct {
 	Type      string  `json:"type"`      // Index 0: "Q" for quote update
 	Ticker    string  `json:"ticker"`    // Index 1: e.g., "eurusd"
@@ -88,21 +85,32 @@ func (tc *TiingoClient) Connect() error {
 
 	tiingoWSURL := os.Getenv("TIINGO_WS_URL")
 	if tiingoWSURL == "" {
-		return fmt.Errorf("TIINGO_WS_URL not set")
+		tiingoWSURL = "wss://api.tiingo.com/fx"
 	}
 
-	headers := http.Header{}
-	headers.Set("Authorization", "Token "+tc.apiKey)
+	log.Printf("Attempting to connect to Tiingo at: %s", tiingoWSURL)
 
-	conn, _, err := dialer.Dial(tiingoWSURL, headers)
+	conn, resp, err := dialer.Dial(tiingoWSURL, nil)
 	if err != nil {
+		if resp != nil {
+			log.Printf("Tiingo handshake failed - Status: %d %s", resp.StatusCode, resp.Status)
+			// Read response body for more details
+			if resp.Body != nil {
+				body := make([]byte, 1024)
+				n, _ := resp.Body.Read(body)
+				if n > 0 {
+					log.Printf("Response body: %s", string(body[:n]))
+				}
+			}
+		}
 		return fmt.Errorf("failed to connect to Tiingo: %w", err)
 	}
 
 	tc.conn = conn
-	log.Println("Connected to Tiingo Forex WebSocket")
+	log.Println("✅ Connected to Tiingo Forex WebSocket")
 
 	go tc.readMessages()
+
 	return nil
 }
 
@@ -165,8 +173,8 @@ func (tc *TiingoClient) handleDataUpdate(response TiingoResponse) {
 		BidSize:   getFloat(row[3]),
 		BidPrice:  getFloat(row[4]),
 		MidPrice:  getFloat(row[5]),
-		AskSize:   getFloat(row[6]),
-		AskPrice:  getFloat(row[7]),
+		AskPrice:  getFloat(row[6]), // Index 6: Ask Price
+		AskSize:   getFloat(row[7]), // Index 7: Ask Size
 	}
 
 	payloadBytes, _ := json.Marshal(forexData)
@@ -177,7 +185,12 @@ func (tc *TiingoClient) handleDataUpdate(response TiingoResponse) {
 		Time:    time.Now(),
 	}
 
-	tc.manager.Broadcast <- event
+	// Non-blocking send to broadcast channel
+	select {
+	case tc.manager.Broadcast <- event:
+	default:
+		log.Printf("Warning: Broadcast channel full, dropping forex update for %s", forexData.Ticker)
+	}
 
 	log.Printf(
 		"FX %s | Bid %.5f | Ask %.5f | Mid %.5f",
@@ -299,7 +312,7 @@ func HandleForexSubscribe(c *Client, event Event) error {
 		return err
 	}
 
-	// Send acknowledgment to client
+	// Send acknowledgment to client (non-blocking)
 	ackPayload, _ := json.Marshal(map[string]interface{}{
 		"status":         "subscribed",
 		"tickers":        payload.Tickers,
@@ -312,7 +325,12 @@ func HandleForexSubscribe(c *Client, event Event) error {
 		Time:    time.Now(),
 	}
 
-	c.Send <- ackEvent
+	select {
+	case c.Send <- ackEvent:
+	default:
+		log.Printf("Failed to send forex subscribe ack to client %s: channel full", c.ID)
+	}
+
 	return nil
 }
 
@@ -336,7 +354,7 @@ func HandleForexUnsubscribe(c *Client, event Event) error {
 		return err
 	}
 
-	// Send acknowledgment
+	// Send acknowledgment (non-blocking)
 	ackPayload, _ := json.Marshal(map[string]interface{}{
 		"status":  "unsubscribed",
 		"tickers": payload.Tickers,
@@ -348,7 +366,12 @@ func HandleForexUnsubscribe(c *Client, event Event) error {
 		Time:    time.Now(),
 	}
 
-	c.Send <- ackEvent
+	select {
+	case c.Send <- ackEvent:
+	default:
+		log.Printf("Failed to send forex unsubscribe ack to client %s: channel full", c.ID)
+	}
+
 	return nil
 }
 
@@ -358,4 +381,9 @@ func (tc *TiingoClient) Close() {
 		tc.conn.Close()
 	}
 	<-tc.done
+}
+
+// GetTiingoClient returns the global Tiingo client instance
+func GetTiingoClient() *TiingoClient {
+	return tiingoClient
 }
