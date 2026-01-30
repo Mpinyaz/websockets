@@ -5,8 +5,6 @@ import (
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 var startTime = time.Now()
@@ -31,6 +29,7 @@ func HandlePing(c *Client, event Event) error {
 		Type:    "pong",
 		Payload: json.RawMessage(`{"timestamp":"` + time.Now().Format(time.RFC3339) + `"}`),
 		Time:    time.Now(),
+		From:    c.ID,
 	}
 
 	c.Send <- pongEvent
@@ -72,7 +71,7 @@ func ServeWS(hub *Manager, w http.ResponseWriter, r *http.Request) {
 		Mgmt: hub,
 		Conn: conn,
 		Send: make(chan *Event, 256),
-		ID:   uuid.New(),
+		ID:   hub.idNode.Generate(),
 		Done: make(chan struct{}),
 	}
 

@@ -18,49 +18,54 @@ pub async fn main() -> Result<()> {
     info!("Connecting to WebSocket feeds...");
     let client = Client::new(&cfg).await?;
 
-    let (forex_result, crypto_result, equity_result) = tokio::join!(
-        outbound_msg_handler(
-            Client {
-                api_key: cfg.data_api_key.clone(),
-                fx_ws: client.fx_ws,
-                crypto_ws: None,
-                equity_ws: None,
-            },
-            AssetClass::Forex,
-            deserialize_msg
-        ),
-        outbound_msg_handler(
-            Client {
-                api_key: cfg.data_api_key.clone(),
-                fx_ws: None,
-                crypto_ws: client.crypto_ws,
-                equity_ws: None,
-            },
-            AssetClass::Crypto,
-            deserialize_msg
-        ),
-        outbound_msg_handler(
-            Client {
-                api_key: cfg.data_api_key.clone(),
-                fx_ws: None,
-                crypto_ws: None,
-                equity_ws: client.equity_ws,
-            },
-            AssetClass::Equity,
-            deserialize_msg
-        )
-    );
+    let forex_client = Client {
+        api_key: cfg.data_api_key.clone(),
+        fx_ws: client.fx_ws,
+        crypto_ws: None,
+        equity_ws: None,
+    };
 
-    // Check results
-    if let Err(e) = forex_result {
-        error!("Forex handler error: {}", e);
-    }
-    if let Err(e) = crypto_result {
-        error!("Crypto handler error: {}", e);
-    }
-    if let Err(e) = equity_result {
-        error!("Equity handler error: {}", e);
-    }
+    let crypto_client = Client {
+        api_key: cfg.data_api_key.clone(),
+        fx_ws: None,
+        crypto_ws: client.crypto_ws,
+        equity_ws: None,
+    };
+
+    let equity_client = Client {
+        api_key: cfg.data_api_key.clone(),
+        fx_ws: None,
+        crypto_ws: None,
+        equity_ws: client.equity_ws,
+    };
+
+    tokio::spawn(async move {
+        if let Err(e) = outbound_msg_handler(forex_client, AssetClass::Forex, deserialize_msg).await
+        {
+            error!("Forex handler crashed: {}", e);
+        }
+    });
+
+    tokio::spawn(async move {
+        if let Err(e) =
+            outbound_msg_handler(crypto_client, AssetClass::Crypto, deserialize_msg).await
+        {
+            error!("Crypto handler crashed: {}", e);
+        }
+    });
+
+    tokio::spawn(async move {
+        if let Err(e) =
+            outbound_msg_handler(equity_client, AssetClass::Equity, deserialize_msg).await
+        {
+            error!("Equity handler crashed: {}", e);
+        }
+    });
+
+    info!("Market data workers started");
+
+    tokio::signal::ctrl_c().await?;
+    warn!("Shutdown signal received");
 
     Ok(())
 }

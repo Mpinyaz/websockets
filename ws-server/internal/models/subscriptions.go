@@ -1,10 +1,12 @@
 package models
 
-import "github.com/google/uuid"
+import (
+	"github.com/bwmarrin/snowflake"
+)
 
 type ClientSub struct {
-	ID     uuid.UUID `json:"id,omitempty"`
-	Forex  *[]string `json:"forex,omitempty"`
-	Equity *[]string `json:"equity,omitempty"`
-	Crypto *[]string `json:"crypto,omitempty"`
+	ID     snowflake.ID `json:"id,omitempty"`
+	Forex  *[]string    `json:"forex,omitempty"`
+	Equity *[]string    `json:"equity,omitempty"`
+	Crypto *[]string    `json:"crypto,omitempty"`
 }

@@ -3,11 +3,11 @@ package cache
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	. "websockets/internal/models"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/google/uuid"
 )
 
 type ClientStore struct {
@@ -76,8 +76,8 @@ func (c *ClientStore) removeClientFromSymbols(
 
 func (c *ClientStore) SetClientSubs(sub ClientSub) error {
 	ctx := context.Background()
-	clientID := sub.ID.String()
 
+	clientID := strconv.FormatInt(sub.ID.Int64(), 10)
 	process := func(asset AssetClass, newSymbols *[]string) error {
 		if newSymbols == nil {
 			return nil
@@ -148,9 +148,9 @@ func (c *ClientStore) PatchClientSub(asset AssetClass, sub ClientSub) error {
 	return c.addClientToSymbols(ctx, clientID, asset, *symbols)
 }
 
-func (c *ClientStore) RemoveClientSubs(clientID uuid.UUID) error {
+func (c *ClientStore) RemoveClientSubs(clientID int64) error {
 	ctx := context.Background()
-	id := clientID.String()
+	id := strconv.FormatInt(clientID, 10)
 
 	assets := []AssetClass{
 		Forex,
@@ -180,11 +180,11 @@ func (c *ClientStore) RemoveClientSubs(clientID uuid.UUID) error {
 }
 
 func (c *ClientStore) RemoveClientSubsByAsset(
-	clientID uuid.UUID,
+	clientID int64,
 	asset AssetClass,
 ) error {
 	ctx := context.Background()
-	id := clientID.String()
+	id := strconv.FormatInt(clientID, 10)
 
 	ck := clientKey(id, asset)
 

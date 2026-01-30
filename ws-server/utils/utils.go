@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -14,6 +15,7 @@ type Config struct {
 	RedisAddrs    []string
 	RedisPassword string
 	AppPort       string
+	SfnodeID      int64
 }
 
 func LoadEnv() (*Config, error) {
@@ -30,7 +32,10 @@ func LoadEnv() (*Config, error) {
 	if addrs == "" {
 		return nil, fmt.Errorf("no Redis addresses configured in REDIS_ADDRS")
 	}
-
+	nodeID, err := strconv.ParseInt(v.GetString("SNOWFLAKE_NODE_ID"), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid Node ID: %s", err)
+	}
 	redisAddrs := strings.Split(addrs, ",")
 	for i := range redisAddrs {
 		redisAddrs[i] = strings.TrimSpace(redisAddrs[i])
@@ -41,6 +46,7 @@ func LoadEnv() (*Config, error) {
 		RedisAddrs:    redisAddrs,
 		RedisPassword: v.GetString("REDIS_PASSWORD"),
 		AppPort:       v.GetString("APP_PORT"),
+		SfnodeID:      nodeID,
 	}
 
 	return cfg, nil

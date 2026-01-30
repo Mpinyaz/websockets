@@ -12,7 +12,7 @@ import (
 	"websockets/internal/store/cache"
 	"websockets/utils"
 
-	"github.com/google/uuid"
+	"github.com/bwmarrin/snowflake"
 	"github.com/gorilla/websocket"
 )
 
@@ -32,7 +32,7 @@ var upgrader = websocket.Upgrader{
 type Event struct {
 	Type    string          `json:"type"`
 	Payload json.RawMessage `json:"payload"`
-	From    uuid.UUID       `json:"from,omitempty"`
+	From    snowflake.ID    `json:"from,omitempty"`
 	Time    time.Time       `json:"time"`
 }
 
@@ -45,19 +45,22 @@ type Manager struct {
 	Handlers      map[string]EventHandler
 	configuration *utils.Config
 	clientStore   *cache.ClientStore
+	idNode        *snowflake.Node
 }
 
 type Client struct {
 	Mgmt *Manager
 	Conn *websocket.Conn
 	Send chan *Event
-	ID   uuid.UUID
+	ID   snowflake.ID
 	Done chan struct{}
 }
 
 type EventHandler func(c *Client, event Event) error
 
 func NewManager(cfg *utils.Config, clientStore *cache.ClientStore) *Manager {
+	node, _ := snowflake.NewNode(cfg.SfnodeID)
+
 	m := &Manager{
 		Clients:       make(map[*Client]bool),
 		Broadcast:     make(chan *Event, 256),
@@ -66,6 +69,7 @@ func NewManager(cfg *utils.Config, clientStore *cache.ClientStore) *Manager {
 		Handlers:      make(map[string]EventHandler),
 		configuration: cfg,
 		clientStore:   clientStore,
+		idNode:        node,
 	}
 	m.setupEventHandlers()
 	return m
@@ -109,7 +113,7 @@ func (m *Manager) Run() {
 
 				// Remove client subscriptions from Redis
 				if m.clientStore != nil {
-					if err := m.clientStore.RemoveClientSubs(client.ID); err != nil {
+					if err := m.clientStore.RemoveClientSubs(client.ID.Int64()); err != nil {
 						log.Printf("Failed to remove client %s from Redis: %v", client.ID, err)
 					}
 				}
@@ -144,7 +148,7 @@ func (m *Manager) Run() {
 						close(client.Send)
 
 						if m.clientStore != nil {
-							if err := m.clientStore.RemoveClientSubs(client.ID); err != nil {
+							if err := m.clientStore.RemoveClientSubs(client.ID.Int64()); err != nil {
 								log.Printf("Failed to remove slow client %s from Redis: %v", client.ID, err)
 							}
 						}
@@ -265,6 +269,7 @@ func (m *Manager) HandlePatchSubscribe(c *Client, event Event) error {
 		Type:    "patch_subscribed",
 		Payload: json.RawMessage(ackPayload),
 		Time:    time.Now(),
+		From:    c.ID,
 	}
 
 	select {
@@ -302,12 +307,12 @@ func (m *Manager) HandleUnsubscribe(c *Client, event Event) error {
 		}
 
 		if m.clientStore != nil {
-			err = m.clientStore.RemoveClientSubsByAsset(c.ID, asset)
+			err = m.clientStore.RemoveClientSubsByAsset(c.ID.Int64(), asset)
 		}
 	} else {
 		// Unsubscribe from all
 		if m.clientStore != nil {
-			err = m.clientStore.RemoveClientSubs(c.ID)
+			err = m.clientStore.RemoveClientSubs(c.ID.Int64())
 		}
 	}
 
