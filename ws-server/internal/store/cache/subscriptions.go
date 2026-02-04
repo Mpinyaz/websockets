@@ -7,13 +7,14 @@ import (
 
 	. "websockets/internal/models"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 type ClientStore struct {
 	rdb *RedisStore
 }
 
+// NewClientStore creates a new client store for a standalone Redis client
 func NewClientStore(rdb *RedisStore) *ClientStore {
 	return &ClientStore{rdb: rdb}
 }
@@ -44,7 +45,7 @@ func (c *ClientStore) addClientToSymbols(
 		return nil
 	}
 
-	_, err := c.rdb.Client.Pipelined(ctx, func(p redis.Pipeliner) error {
+	_, err := c.rdb.client.Pipelined(ctx, func(p redis.Pipeliner) error {
 		for _, symbol := range symbols {
 			p.SAdd(ctx, symbolKey(asset, symbol), clientID)
 		}
@@ -64,7 +65,7 @@ func (c *ClientStore) removeClientFromSymbols(
 		return nil
 	}
 
-	_, err := c.rdb.Client.Pipelined(ctx, func(p redis.Pipeliner) error {
+	_, err := c.rdb.client.Pipelined(ctx, func(p redis.Pipeliner) error {
 		for _, symbol := range symbols {
 			p.SRem(ctx, symbolKey(asset, symbol), clientID)
 		}
@@ -85,7 +86,7 @@ func (c *ClientStore) SetClientSubs(sub ClientSub) error {
 
 		ck := clientKey(clientID, asset)
 
-		oldSymbols, err := c.rdb.Client.SMembers(ctx, ck).Result()
+		oldSymbols, err := c.rdb.client.SMembers(ctx, ck).Result()
 		if err != nil && err != redis.Nil {
 			return err
 		}
@@ -94,12 +95,12 @@ func (c *ClientStore) SetClientSubs(sub ClientSub) error {
 			return err
 		}
 
-		if err := c.rdb.Client.Del(ctx, ck).Err(); err != nil {
+		if err := c.rdb.client.Del(ctx, ck).Err(); err != nil {
 			return err
 		}
 
 		if len(*newSymbols) > 0 {
-			if err := c.rdb.Client.SAdd(ctx, ck, toInterfaceSlice(*newSymbols)...).Err(); err != nil {
+			if err := c.rdb.client.SAdd(ctx, ck, toInterfaceSlice(*newSymbols)...).Err(); err != nil {
 				return err
 			}
 			return c.addClientToSymbols(ctx, clientID, asset, *newSymbols)
@@ -141,7 +142,7 @@ func (c *ClientStore) PatchClientSub(asset AssetClass, sub ClientSub) error {
 
 	ck := clientKey(clientID, asset)
 
-	if err := c.rdb.Client.SAdd(ctx, ck, toInterfaceSlice(*symbols)...).Err(); err != nil {
+	if err := c.rdb.client.SAdd(ctx, ck, toInterfaceSlice(*symbols)...).Err(); err != nil {
 		return err
 	}
 
@@ -158,11 +159,11 @@ func (c *ClientStore) RemoveClientSubs(clientID int64) error {
 		Crypto,
 	}
 
-	_, err := c.rdb.Client.Pipelined(ctx, func(p redis.Pipeliner) error {
+	_, err := c.rdb.client.Pipelined(ctx, func(p redis.Pipeliner) error {
 		for _, asset := range assets {
 			ck := clientKey(id, asset)
 
-			symbols, err := c.rdb.Client.SMembers(ctx, ck).Result()
+			symbols, err := c.rdb.client.SMembers(ctx, ck).Result()
 			if err != nil && err != redis.Nil {
 				return err
 			}
@@ -188,12 +189,12 @@ func (c *ClientStore) RemoveClientSubsByAsset(
 
 	ck := clientKey(id, asset)
 
-	symbols, err := c.rdb.Client.SMembers(ctx, ck).Result()
+	symbols, err := c.rdb.client.SMembers(ctx, ck).Result()
 	if err != nil && err != redis.Nil {
 		return err
 	}
 
-	_, err = c.rdb.Client.Pipelined(ctx, func(p redis.Pipeliner) error {
+	_, err = c.rdb.client.Pipelined(ctx, func(p redis.Pipeliner) error {
 		for _, symbol := range symbols {
 			p.SRem(ctx, symbolKey(asset, symbol), id)
 		}

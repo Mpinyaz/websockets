@@ -3,52 +3,86 @@
 // It supports:
 //   - Client → symbols lookups
 //   - Symbol → clients lookups
-//   - Redis Cluster-safe key layouts
+//   - Works with standalone Redis or Redis Cluster (for dev or production)
+//
+// TODO: implement Redis cluster instance
 package cache
 
 import (
 	"context"
-	"errors"
 	"log"
+	"time"
 
 	. "websockets/utils"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 type RedisStore struct {
-	Client *redis.ClusterClient
+	client redis.Cmdable
+	// Keep a reference to the actual client so we can close it
+	rawClient interface{}
 }
 
-var ErrNil = errors.New("no matching record found in redis database")
-
 func NewRedisClient(cfg *Config) (*RedisStore, error) {
-	client := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs: cfg.RedisAddrs,
-		// Password: cfg.RedisPassword,
-		PoolSize: 50,
-	})
+	var client redis.Cmdable
+	var raw interface{}
 
-	if err := client.Ping(context.Background()).Err(); err != nil {
+	if len(cfg.RedisAddrs) == 1 {
+		// Standalone Redis
+		c := redis.NewClient(&redis.Options{
+			Addr:         cfg.RedisAddrs[0],
+			PoolSize:     50,
+			DialTimeout:  30 * time.Second,
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 30 * time.Second,
+		})
+		client = c
+		raw = c
+	} else {
+		// Redis Cluster
+		c := redis.NewClusterClient(&redis.ClusterOptions{
+			Addrs:          cfg.RedisAddrs,
+			PoolSize:       50,
+			DialTimeout:    30 * time.Second,
+			ReadTimeout:    30 * time.Second,
+			WriteTimeout:   30 * time.Second,
+			RouteByLatency: true,
+		})
+		client = c
+		raw = c
+	}
+
+	ctx := context.Background()
+	if err := client.Ping(ctx).Err(); err != nil {
 		return nil, err
 	}
 
 	return &RedisStore{
-		Client: client,
+		client:    client,
+		rawClient: raw,
 	}, nil
 }
 
+// Close closes the underlying client
 func (r *RedisStore) Close() error {
-	return r.Client.Close()
+	switch c := r.rawClient.(type) {
+	case *redis.Client:
+		return c.Close()
+	case *redis.ClusterClient:
+		return c.Close()
+	default:
+		return nil
+	}
 }
 
 func (r *RedisStore) Run() {
 	ctx := context.Background()
 
-	status, err := r.Client.Ping(ctx).Result()
+	status, err := r.client.Ping(ctx).Result()
 	if err != nil {
-		log.Fatalln("Redis cluster connection failed:", err)
+		log.Fatalln("Redis connection failed:", err)
 	}
 
-	log.Println("Redis cluster status:", status)
+	log.Println("Redis status:", status)
 }

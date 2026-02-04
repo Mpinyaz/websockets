@@ -1,90 +1,50 @@
 use anyhow::Result;
+use mdworkers::config::cfg::Config;
 use mdworkers::services::streams::get_stream_entities;
-use mdworkers::types::assetclass::AssetClass;
-use mdworkers::types::message::deserialize_msg;
-use mdworkers::ws::handlers::outbound_msg_handler;
-use mdworkers::{config::cfg::Config, types::client::Client};
-use tracing::{error, info, warn};
+use mdworkers::types::client::Client;
+use mdworkers::ws::actors::spawn_ws_actors;
+use mdworkers::ws::handlers::run_sub_consumer;
+use tracing::{error, info};
 
 #[tokio::main]
-pub async fn main() -> Result<()> {
+async fn main() -> Result<()> {
+    // Initialize logging
     tracing_subscriber::fmt::init();
 
+    info!("🚀 Starting Market Data Workers...");
+
+    // Load configuration
     let cfg = Config::load_env()?;
 
+    // Initialize RabbitMQ streams
     info!("Initializing RabbitMQ streams...");
     let _stream_entities = get_stream_entities().await?;
+    info!("✅ RabbitMQ streams initialized");
 
+    // Create WebSocket client
     info!("Connecting to WebSocket feeds...");
     let client = Client::new(&cfg).await?;
+    info!("✅ WebSocket connections established");
 
-    let forex_client = Client {
-        api_key: cfg.data_api_key.clone(),
-        fx_ws: client.fx_ws,
-        crypto_ws: None,
-        equity_ws: None,
-    };
+    // Spawn WebSocket actors and get command channels
+    info!("Spawning WebSocket actors...");
+    let ws_channels = spawn_ws_actors(client).await;
+    info!("✅ WebSocket actors spawned");
 
-    let crypto_client = Client {
-        api_key: cfg.data_api_key.clone(),
-        fx_ws: None,
-        crypto_ws: client.crypto_ws,
-        equity_ws: None,
-    };
-
-    let equity_client = Client {
-        api_key: cfg.data_api_key.clone(),
-        fx_ws: None,
-        crypto_ws: None,
-        equity_ws: client.equity_ws,
-    };
-
+    // Start subscription consumer
+    info!("Starting subscription consumer...");
     tokio::spawn(async move {
-        match outbound_msg_handler(
-            forex_client,
-            AssetClass::Forex,
-            cfg.forex_tickers,
-            deserialize_msg,
-        )
-        .await
-        {
-            Ok(_) => info!("Forex handler completed"),
-            Err(e) => error!("Forex handler crashed: {}", e),
+        if let Err(e) = run_sub_consumer(ws_channels).await {
+            error!("❌ Subscription consumer error: {}", e);
         }
     });
 
-    tokio::spawn(async move {
-        match outbound_msg_handler(
-            crypto_client,
-            AssetClass::Crypto,
-            cfg.crypto_tickers,
-            deserialize_msg,
-        )
-        .await
-        {
-            Ok(_) => info!("Crypto handler completed"),
-            Err(e) => error!("Crypto handler crashed: {}", e),
-        }
-    });
+    info!("✅ All systems operational");
 
-    tokio::spawn(async move {
-        match outbound_msg_handler(
-            equity_client,
-            AssetClass::Equity,
-            cfg.equity_tickers,
-            deserialize_msg,
-        )
-        .await
-        {
-            Ok(_) => info!("Equity handler completed"),
-            Err(e) => error!("Equity handler crashed: {}", e),
-        }
-    });
-
-    info!("Market data workers started");
-
+    // Wait for shutdown signal
     tokio::signal::ctrl_c().await?;
-    warn!("Shutdown signal received");
+
+    info!("🛑 Shutdown signal received, stopping...");
 
     Ok(())
 }

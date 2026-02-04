@@ -14,34 +14,32 @@ import (
 )
 
 type MdwsStreams struct {
-	manager          *Manager
 	env              *stream.Environment
 	mktUpdates       *stream.Consumer
 	mktSubscriptions *stream.Producer
 	ctx              context.Context
 	cancel           context.CancelFunc
+	broadcastChan    chan *Event
 }
 
-// InitMktStreams initializes both consumer and producer for market data streams
-func InitMktStreams(manager *Manager) (*MdwsStreams, error) {
-	cfg := manager.GetConfig()
-
+// InitMktStreams initializes both consumer and producer for market data stream
+func InitMktStreams(mgr *Manager) error {
+	cfg := mgr.GetConfig()
 	log.Printf("Initializing market data streams...")
 
 	// Create environment
 	env, err := initStreamEnv(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create stream environment: %w", err)
+		return fmt.Errorf("failed to create stream environment: %w", err)
 	}
 
 	// Create context for lifecycle management
 	ctx, cancel := context.WithCancel(context.Background())
 
 	streams := &MdwsStreams{
-		manager: manager,
-		env:     env,
-		ctx:     ctx,
-		cancel:  cancel,
+		env:    env,
+		ctx:    ctx,
+		cancel: cancel,
 	}
 
 	// Create consumer
@@ -49,7 +47,7 @@ func InitMktStreams(manager *Manager) (*MdwsStreams, error) {
 	if err != nil {
 		cancel()
 		env.Close()
-		return nil, fmt.Errorf("failed to create update consumer: %w", err)
+		return fmt.Errorf("failed to create update consumer: %w", err)
 	}
 	streams.mktUpdates = mktUpdates
 	log.Printf("Market updates consumer created on stream '%s'", cfg.RmqMarketUpdate)
@@ -60,13 +58,16 @@ func InitMktStreams(manager *Manager) (*MdwsStreams, error) {
 		cancel()
 		mktUpdates.Close()
 		env.Close()
-		return nil, fmt.Errorf("failed to create subscription producer: %w", err)
+		return fmt.Errorf("failed to create subscription producer: %w", err)
 	}
 	streams.mktSubscriptions = mktSubscriptions
 	log.Printf("Market subscriptions producer created on stream '%s'", cfg.RmqMarketSubs)
 
+	streams.broadcastChan = mgr.Broadcast
+
+	mgr.SetStreams(streams)
 	log.Printf("Market data streams initialized successfully")
-	return streams, nil
+	return nil
 }
 
 // Close gracefully shuts down all stream connections
@@ -182,10 +183,21 @@ func handleMktUpdate(
 		log.Println("Tiingo heartbeat received")
 
 	case "A": // Actual market update
+
+		var arr []interface{}
+		if err := json.Unmarshal(payload.Data, &arr); err != nil {
+			log.Printf(
+				"expected array payload for service=%s, got %s",
+				payload.Service,
+				string(payload.Data),
+			)
+			return
+		}
+
 		switch payload.Service {
 		case "fx":
 			var fx TiingoForexData
-			if err := parseForexArray(payload.Data, &fx); err != nil {
+			if err := parseForexArray(arr, &fx); err != nil {
 				log.Printf("Forex parse error: %v", err)
 				return
 			}
@@ -193,7 +205,7 @@ func handleMktUpdate(
 
 		case "crypto_data":
 			var c TiingoCryptoData
-			if err := parseCryptoArray(payload.Data, &c); err != nil {
+			if err := parseCryptoArray(arr, &c); err != nil {
 				log.Printf("Crypto parse error: %v", err)
 				return
 			}
@@ -201,7 +213,7 @@ func handleMktUpdate(
 
 		case "iex":
 			var eq TiingoEquityData
-			if err := parseEquityArray(payload.Data, &eq); err != nil {
+			if err := parseEquityArray(arr, &eq); err != nil {
 				log.Printf("Equity parse error: %v", err)
 				return
 			}
@@ -240,10 +252,10 @@ func handleMktUpdate(
 		}
 
 		select {
-		case streams.manager.Broadcast <- &event:
+		case streams.broadcastChan <- &event:
 			// Successfully sent
 		case <-time.After(100 * time.Millisecond):
-			log.Println("⚠️ Broadcast channel timeout, dropping market update")
+			// log.Println("⚠️ Broadcast channel timeout, dropping market update")
 		case <-streams.ctx.Done():
 			return
 		}
@@ -435,9 +447,13 @@ func parseEquityArray(raw []interface{}, eq *TiingoEquityData) error {
 	if eq.Date, err = timeAssert(1); err != nil {
 		return err
 	}
-	if eq.Nanos, err = int64(raw[2].(float64)), nil; err != nil {
-		return err
+
+	if f, ok := raw[2].(float64); ok {
+		eq.Nanos = int64(f)
+	} else {
+		return fmt.Errorf("field 2 is not float64")
 	}
+
 	if eq.Ticker, err = strAssert(3); err != nil {
 		return err
 	}
@@ -465,15 +481,29 @@ func parseEquityArray(raw []interface{}, eq *TiingoEquityData) error {
 	}
 
 	// Trading state fields
-	if eq.Halted, err = int32(raw[11].(float64)), nil; err != nil {
-		return err
+
+	if f, ok := raw[11].(float64); ok {
+		eq.Halted = int32(f)
+	} else {
+		return fmt.Errorf("field 11 is not float64")
 	}
-	if eq.AfterHours, err = int32(raw[12].(float64)), nil; err != nil {
-		return err
+
+	if f, ok := raw[12].(float64); ok {
+		eq.AfterHours = int32(f)
+	} else {
+		return fmt.Errorf("field 12 is not float64")
 	}
-	if eq.ISO, err = int32(raw[13].(float64)), nil; err != nil {
-		return err
+	if f, ok := raw[12].(float64); ok {
+		eq.AfterHours = int32(f)
+	} else {
+		return fmt.Errorf("field 12 is not float64")
 	}
+	if f, ok := raw[13].(float64); ok {
+		eq.ISO = int32(f)
+	} else {
+		return fmt.Errorf("field 12 is not float64")
+	}
+
 	if eq.Oddlot, err = intAssert(14); err != nil {
 		return err
 	}

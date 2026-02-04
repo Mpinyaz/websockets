@@ -1,123 +1,108 @@
-use crate::{
-    services::streams::get_stream_entities,
-    types::{
-        assetclass::AssetClass,
-        client::{Client, WsStream},
-        message::{MsgError, SubscribeData, SubscribeRequest, WsResponse},
-    },
-};
-use anyhow::Result;
-use futures_util::SinkExt;
+use crate::services::streams::create_sub_consumer;
+use crate::types::{assetclass::AssetClass, message::MsgError};
+use crate::ws::actors::{WsChannels, WsCommand};
 use futures_util::StreamExt;
-use rabbitmq_stream_client::types::Message as StreamMessage;
-use tokio_tungstenite::tungstenite::protocol::Message;
+use serde::Deserialize;
 use tracing::{error, info};
 
-pub async fn outbound_msg_handler<F>(
-    mut client: Client,
-    asset_class: AssetClass,
+#[derive(Debug, Deserialize)]
+struct StreamSubEvent {
+    #[serde(rename = "type")]
+    event_type: String,
+    payload: SubscribePayload,
+}
+
+#[derive(Debug, Deserialize)]
+struct SubscribePayload {
+    #[serde(rename = "assetClass")]
+    asset_class: String,
     tickers: Vec<String>,
-    mut on_message: F,
-) -> Result<(), MsgError>
-where
-    F: FnMut(Message) -> Result<WsResponse, MsgError>,
-{
-    let mut conn = match asset_class {
-        AssetClass::Forex => client.fx_ws.take(),
-        AssetClass::Crypto => client.crypto_ws.take(),
-        AssetClass::Equity => client.equity_ws.take(),
+}
+
+fn parse_asset_class(s: &str) -> Option<AssetClass> {
+    match s.to_lowercase().as_str() {
+        "forex" => Some(AssetClass::Forex),
+        "crypto" => Some(AssetClass::Crypto),
+        "equity" => Some(AssetClass::Equity),
+        _ => None,
     }
-    .ok_or_else(|| MsgError::ReadError(format!("{:?} not connected", asset_class)))?;
+}
 
-    let init_seed = SubscribeData {
-        subscription_id: None,
-        threshold_level: Some("5".to_string()),
-        tickers: Some(tickers),
-    };
+/// Run subscription consumer - receives events from RabbitMQ and sends commands to actors
+pub async fn run_sub_consumer(channels: WsChannels) -> Result<(), MsgError> {
+    let mut consumer = create_sub_consumer()
+        .await
+        .map_err(|e| MsgError::ReadError(format!("Failed to create consumer: {}", e)))?;
 
-    subscribe_data(client.api_key, &mut conn, init_seed).await?;
-    info!("Subscribed to {:?}", asset_class);
+    info!("📡 Subscription consumer started");
 
-    let (_, mut read) = conn.split();
-
-    while let Some(msg) = read.next().await {
-        match msg {
-            Ok(message) => {
-                match &message {
-                    Message::Text(_) | Message::Binary(_) => {
-                        match on_message(message) {
-                            Ok(ws_response) => {
-                                info!(
-                                    "Received {:?} message type: {} payload: {:?}",
-                                    asset_class, ws_response.message_type, ws_response.data
-                                );
-                                if let Err(e) = publish_data(ws_response).await {
-                                    error!("Publish failed for {:?}: {}", asset_class, e);
-                                }
-                            }
-                            Err(e) => {
-                                error!("Error parsing message for {:?}: {}", asset_class, e);
-                                // Continue - don't crash
-                            }
-                        }
-                    }
-                    Message::Ping(_) => {
-                        info!("Received ping for {:?}", asset_class);
-                    }
-                    Message::Pong(_) => {
-                        info!("Received pong for {:?}", asset_class);
-                    }
-                    Message::Close(frame) => {
-                        info!("Connection closed for {:?}: {:?}", asset_class, frame);
-                        break; // Exit gracefully
-                    }
-                    Message::Frame(_) => {
-                        // Raw frame, ignore
-                    }
-                }
-            }
+    while let Some(delivery) = consumer.next().await {
+        let msg = match delivery {
+            Ok(m) => m,
             Err(e) => {
-                error!("WebSocket error for {:?}: {}", asset_class, e);
-                return Err(MsgError::ReadError(format!("WebSocket error: {}", e)));
+                error!("❌ RabbitMQ consumer error: {}", e);
+                continue;
             }
+        };
+
+        let payload = match msg.message().data() {
+            Some(d) => d,
+            None => {
+                error!("⚠️ Empty subscription message received");
+                continue;
+            }
+        };
+
+        let event: StreamSubEvent = match serde_json::from_slice(payload) {
+            Ok(e) => e,
+            Err(e) => {
+                error!("⚠️ Failed to parse subscription event: {}", e);
+                continue;
+            }
+        };
+
+        let asset = match parse_asset_class(&event.payload.asset_class) {
+            Some(a) => a,
+            None => {
+                error!("❌ Unknown asset class: {}", event.payload.asset_class);
+                continue;
+            }
+        };
+
+        // Get the appropriate channel for this asset class
+        let tx = match channels.get_channel(asset) {
+            Some(t) => t,
+            None => {
+                error!("❌ No channel for {:?}", asset);
+                continue;
+            }
+        };
+
+        // Create subscription data
+        let sub_data = crate::types::message::SubscribeData {
+            subscription_id: None,
+            threshold_level: Some("5".to_string()),
+            tickers: Some(event.payload.tickers.clone()),
+        };
+
+        // Create command based on event type
+        let cmd = match event.event_type.as_str() {
+            "subscribe" => WsCommand::Subscribe(sub_data),
+            "unsubscribe" => WsCommand::Unsubscribe(sub_data),
+            other => {
+                error!("❌ Unknown event type: {}", other);
+                continue;
+            }
+        };
+
+        // Send command to actor via channel (non-blocking!)
+        if let Err(e) = tx.send(cmd).await {
+            error!("❌ Failed to send command to {:?} actor: {}", asset, e);
+        } else {
+            info!("✅ Sent {:?} command to {:?}", event.event_type, asset);
         }
     }
 
-    info!("{:?} handler completed normally", asset_class);
-    Ok(())
-}
-
-pub async fn subscribe_data(
-    api_key: String,
-    conn: &mut WsStream,
-    event_data: SubscribeData,
-) -> Result<(), MsgError> {
-    let subscribe_req = SubscribeRequest {
-        event_name: "subscribe".to_string(),
-        authorization: api_key,
-        event_data,
-    };
-    let payload = serde_json::to_string(&subscribe_req)
-        .map_err(|e| MsgError::SendError(format!("Serialization error: {}", e)))?;
-    info!("Subscription payload: {}", payload);
-    conn.send(Message::Text(payload.into()))
-        .await
-        .map_err(|e| MsgError::SendError(e.to_string()))?;
-    Ok(())
-}
-
-pub async fn publish_data(payload: WsResponse) -> Result<()> {
-    let stream_entities = get_stream_entities().await?;
-    let json_bytes =
-        serde_json::to_vec(&payload).map_err(|e| MsgError::SendError(e.to_string()))?;
-    let msg = StreamMessage::builder()
-        .properties()
-        .content_type("application/json")
-        .message_builder()
-        .body(json_bytes)
-        .build();
-
-    stream_entities.producer.send_with_confirm(msg).await?;
-
+    info!("📡 Subscription consumer stopped");
     Ok(())
 }

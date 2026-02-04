@@ -38,7 +38,7 @@ func main() {
 	// ------------------------------------------------------------
 	// RabbitMQ Streams (market updates + subs)
 	// ------------------------------------------------------------
-	if _, err := InitMktStreams(manager); err != nil {
+	if err := InitMktStreams(manager); err != nil {
 		log.Fatalf("Failed to initialize RabbitMQ streams: %v", err)
 	}
 	log.Println("RabbitMQ market streams connected")
