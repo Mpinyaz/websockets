@@ -1,3 +1,4 @@
+use crate::config::cfg::Config;
 use crate::types::{
     assetclass::AssetClass,
     client::{Client, WsStream},
@@ -6,6 +7,7 @@ use crate::types::{
 use futures_util::{SinkExt, StreamExt};
 use serde_json;
 use tokio::sync::mpsc;
+use tokio::time::{self, Duration};
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tracing::{error, info};
 
@@ -32,7 +34,7 @@ impl WsChannels {
 }
 
 /// Spawn WebSocket actors for each asset class
-pub async fn spawn_ws_actors(client: Client) -> WsChannels {
+pub async fn spawn_ws_actors(client: Client, cfg: &Config) -> WsChannels {
     let mut forex_tx = None;
     let mut crypto_tx = None;
     let mut equity_tx = None;
@@ -45,6 +47,7 @@ pub async fn spawn_ws_actors(client: Client) -> WsChannels {
             client.api_key.clone(),
             rx,
             AssetClass::Forex,
+            cfg.clone(),
         ));
         forex_tx = Some(tx);
         info!("🎭 Forex actor spawned");
@@ -58,6 +61,7 @@ pub async fn spawn_ws_actors(client: Client) -> WsChannels {
             client.api_key.clone(),
             rx,
             AssetClass::Crypto,
+            cfg.clone(),
         ));
         crypto_tx = Some(tx);
         info!("🎭 Crypto actor spawned");
@@ -71,6 +75,7 @@ pub async fn spawn_ws_actors(client: Client) -> WsChannels {
             client.api_key.clone(),
             rx,
             AssetClass::Equity,
+            cfg.clone(),
         ));
         equity_tx = Some(tx);
         info!("🎭 Equity actor spawned");
@@ -85,46 +90,78 @@ pub async fn spawn_ws_actors(client: Client) -> WsChannels {
 
 /// WebSocket actor - one per asset class
 async fn ws_actor(
-    conn: WsStream,
+    initial_conn: WsStream,
     api_key: String,
     mut cmd_rx: mpsc::Receiver<WsCommand>,
     asset_class: AssetClass,
+    cfg: Config,
 ) -> Result<(), MsgError> {
-    let (mut write, mut read) = conn.split();
-
     info!("🎭 Actor started for {:?}", asset_class);
 
+    let mut current_conn_opt = Some(initial_conn);
+
     loop {
-        tokio::select! {
-            // Handle commands from channel
-            Some(cmd) = cmd_rx.recv() => {
-                if let Err(e) = handle_command(&mut write, &api_key, cmd, asset_class).await {
-                    error!("❌ Command error for {:?}: {}", asset_class, e);
+        let conn = if let Some(c) = current_conn_opt.take() {
+            c
+        } else {
+            info!("Attempting to establish connection for {:?}", asset_class);
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            match Client::connect(&cfg, asset_class).await {
+                Ok(new_conn) => {
+                    info!("✅ Connection established for {:?}", asset_class);
+                    new_conn
+                }
+                Err(reconnect_err) => {
+                    error!(
+                        "❌ Connection failed for {:?}: {}",
+                        asset_class, reconnect_err
+                    );
+                    continue;
                 }
             }
+        };
 
-            // Handle incoming WebSocket messages
-            msg = read.next() => {
-                match msg {
-                    Some(Ok(message)) => {
-                        if let Err(e) = handle_ws_message(message, asset_class).await {
-                            error!("⚠️ Message handling error for {:?}: {}", asset_class, e);
+        let (mut write, mut read) = conn.split();
+
+        let connection_result: Result<(), MsgError> = loop {
+            tokio::select! {
+                Some(cmd) = cmd_rx.recv() => {
+                    if let Err(e) = handle_command(&mut write, &api_key, cmd, asset_class).await {
+                        error!("❌ Command error for {:?}: {}", asset_class, e);
+                    }
+                }
+                msg = read.next() => {
+                    match msg {
+                        Some(Ok(message)) => {
+                            if let Err(e) = handle_ws_message(message, asset_class).await {
+                                error!("⚠️ Message handling error for {:?}: {}", asset_class, e);
+                            }
+                        }
+                        Some(Err(e)) => {
+                            error!("❌ WebSocket error for {:?}: {}", asset_class, e);
+                            break Err(MsgError::ReadError(e.to_string()));
+                        }
+                        None => {
+                            info!("🔌 WebSocket stream ended for {:?}", asset_class);
+                            break Err(MsgError::ReadError("Stream ended".to_string()));
                         }
                     }
-                    Some(Err(e)) => {
-                        error!("❌ WebSocket error for {:?}: {}", asset_class, e);
-                        break;
-                    }
-                    None => {
-                        info!("🔌 WebSocket stream ended for {:?}", asset_class);
-                        break;
-                    }
                 }
             }
+        };
+
+        if let Err(e) = connection_result {
+            error!("Connection for {:?} closed due to: {}", asset_class, e);
+            // Outer loop will now attempt to establish a new connection
+        } else {
+            // This branch should ideally not be reached if the inner loop breaks only on errors/None
+            // If it does, it means the inner loop completed without error, which is unexpected for a continuous stream.
+            // For now, we'll log and break the outer loop.
+            info!("🎭 Actor stopping gracefully for {:?}", asset_class);
+            break;
         }
     }
 
-    info!("🎭 Actor stopped for {:?}", asset_class);
     Ok(())
 }
 

@@ -168,6 +168,7 @@ func handleMktUpdate(
 	}
 
 	var eventPayload interface{} // Will hold parsed data for Event
+	var assetClass string // Holds the asset class for market data updates
 
 	switch payload.MessageType {
 	case "I": // Info
@@ -202,6 +203,7 @@ func handleMktUpdate(
 				return
 			}
 			eventPayload = fx
+			assetClass = "forex"
 
 		case "crypto_data":
 			var c TiingoCryptoData
@@ -210,6 +212,7 @@ func handleMktUpdate(
 				return
 			}
 			eventPayload = c
+			assetClass = "crypto"
 
 		case "iex":
 			var eq TiingoEquityData
@@ -218,6 +221,7 @@ func handleMktUpdate(
 				return
 			}
 			eventPayload = eq
+			assetClass = "equity"
 
 		default:
 			log.Printf("Unknown service in update: %s", payload.Service)
@@ -246,9 +250,10 @@ func handleMktUpdate(
 		}
 
 		event := Event{
-			Type:    "market_update",
-			Payload: eventBytes,
-			Time:    time.Now(),
+			Type:       "market_update",
+			Payload:    eventBytes,
+			Time:       time.Now(),
+			AssetClass: assetClass,
 		}
 
 		select {

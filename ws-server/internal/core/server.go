@@ -34,6 +34,7 @@ type Event struct {
 	Payload json.RawMessage `json:"payload"`
 	From    snowflake.ID    `json:"from,omitempty"`
 	Time    time.Time       `json:"time"`
+	AssetClass string      `json:"assetClass,omitempty"`
 }
 
 type Manager struct {

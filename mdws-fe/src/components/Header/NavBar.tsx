@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Home, Menu, Circle, X } from 'lucide-react'
+import { Circle, Home, Menu, X } from 'lucide-react'
 import { NavLink } from './NavLink'
 import { useMarketSocketContext } from '@/context/MktSocketCtx'
 
@@ -100,6 +100,20 @@ export default function Navbar() {
               <Home size={20} />
             </div>
             <span className="font-medium">Home</span>
+          </NavLink>
+          <NavLink
+            to="/subscriptions"
+            onClick={() => setIsOpen(false)}
+            className="flex items-center gap-3 p-4 rounded-xl hover:bg-slate-800/50 transition-all mb-2 text-slate-300 hover:text-white group"
+            activeProps={{
+              className:
+                'flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 transition-all mb-2 text-white shadow-lg shadow-cyan-500/20',
+            }}
+          >
+            <div className="p-2 rounded-lg bg-slate-800 group-hover:bg-slate-700 transition-colors">
+              <Home size={20} />
+            </div>
+            <span className="font-medium">Subscriptions</span>
           </NavLink>
         </nav>
 

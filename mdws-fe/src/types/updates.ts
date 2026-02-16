@@ -12,12 +12,12 @@ export interface ForexUpdate {
 }
 
 export interface CryptoUpdate {
-  updateType: 'T' | 'Q' // Trade or Quote
+  update_type: 'T' | 'Q' // Trade or Quote
   ticker: string
   date: string // ISO
   exchange: string
-  lastSize: number
-  lastPrice: number
+  last_size: number
+  last_price: number
 }
 
 export interface EquityUpdate {
