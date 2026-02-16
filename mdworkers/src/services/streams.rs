@@ -1,10 +1,10 @@
 use anyhow::Result;
-use rabbitmq_stream_client::{error::StreamCreateError, NoDedup};
 use rabbitmq_stream_client::{
-    types::{ByteCapacity, ResponseCode, StreamCreator},
     Consumer,
+    types::{ByteCapacity, ResponseCode, StreamCreator},
 };
 use rabbitmq_stream_client::{Environment, Producer};
+use rabbitmq_stream_client::{NoDedup, error::StreamCreateError};
 use tokio::sync::OnceCell;
 use tracing::info;
 

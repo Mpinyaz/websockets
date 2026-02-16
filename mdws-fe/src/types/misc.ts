@@ -1,7 +1,7 @@
 import type { AssetClass } from './subscriptions'
 import type { WsEvent } from './event'
 
-export type TickerCategory = 'crypto' | 'forex' | 'equity';
+export type TickerCategory = 'crypto' | 'forex' | 'equity'
 
 export interface AckPayload {
   status: 'subscribed' | 'unsubscribed' | 'patched'

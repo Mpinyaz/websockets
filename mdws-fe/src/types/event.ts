@@ -3,4 +3,5 @@ export interface WsEvent<T = unknown> {
   payload: T
   from?: string
   time?: string
+  assetClass?: string
 }

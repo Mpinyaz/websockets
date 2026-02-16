@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::error::Error;
 use std::fmt;
 
+#[derive(Clone)]
 pub struct Config {
     pub data_url: String,
     pub data_api_key: String,

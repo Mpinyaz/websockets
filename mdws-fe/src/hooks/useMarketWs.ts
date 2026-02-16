@@ -10,7 +10,7 @@ export interface MarketSocket {
   connected: boolean
   lastEvent: WsEvent | null
   subscribe: (payload: SubscribePayload) => void
-  unsubscribe: (assetClass: SubscribePayload['assetClass']) => void
+  unsubscribe: (payload: UnsubscribePayload) => void
   getWebSocket: () => WebSocketLike | null
 }
 
@@ -39,11 +39,11 @@ export function useMarketSocket(): MarketSocket {
     }
   }
 
-  const unsubscribe = (assetClass: SubscribePayload['assetClass']) => {
+  const unsubscribe = (payload: UnsubscribePayload) => {
     if (readyState === ReadyState.OPEN) {
       sendJsonMessage({
         type: 'unsubscribe',
-        payload: { assetClass, tickers: [] },
+        payload,
       })
     }
   }

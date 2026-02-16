@@ -2,7 +2,6 @@ import { StrictMode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 
-import { type MarketSocket, useMarketSocket } from '@hooks/useMarketWs'
 // Import the generated route tree
 import { routeTree } from './routeTree.gen'
 
@@ -10,6 +9,9 @@ import './styles.css'
 import reportWebVitals from './reportWebVitals.ts'
 import { MarketSocketProvider } from './context/MktSocketCtx.tsx'
 import { TickerProvider } from './context/TickersCtx.tsx'
+
+import {  useMarketSocket } from '@hooks/useMarketWs'
+import type {MarketSocket} from '@hooks/useMarketWs';
 
 export interface RouterContext {
   socket: MarketSocket

@@ -28,7 +28,7 @@ async fn main() -> Result<()> {
 
     // Spawn WebSocket actors and get command channels
     info!("Spawning WebSocket actors...");
-    let ws_channels = spawn_ws_actors(client).await;
+    let ws_channels = spawn_ws_actors(client, &cfg).await;
     info!("✅ WebSocket actors spawned");
 
     // Start subscription consumer

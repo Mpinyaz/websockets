@@ -3,7 +3,7 @@ use anyhow::Result;
 use std::error::Error;
 use std::fmt;
 use tokio::net::TcpStream;
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use tracing::{error, info};
 
 pub type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -40,7 +40,7 @@ impl fmt::Debug for ClientError {
 impl Error for ClientError {}
 
 impl Client {
-    async fn connect(cfg: &Config, ac: AssetClass) -> Result<WsStream, ClientError> {
+    pub async fn connect(cfg: &Config, ac: AssetClass) -> Result<WsStream, ClientError> {
         let url = format!("{}/{}", cfg.data_url, ac);
         info!("Connecting to WebSocket at: {}", url);
 
