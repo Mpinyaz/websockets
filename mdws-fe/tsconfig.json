@@ -50,6 +50,9 @@
       ],
       "@lib/*": [
         "./src/lib/*"
+      ],
+      "@context/*": [
+        "./src/context/*"
       ]
     }
   },
