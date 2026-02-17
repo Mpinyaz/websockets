@@ -1,0 +1,78 @@
+services:
+  mdws-fe:
+    build:
+      context: ./mdws-fe
+      dockerfile: Dockerfile
+    container_name: mdws_fe
+    env_file:
+      - .env
+    ports:
+      - "3000:80"
+    depends_on:
+      websockets:
+        condition: service_started
+    restart: unless-stopped
+  mdwsworkers:
+    build:
+      context: ./mdworkers # build context is the ws-server folder
+      dockerfile: Dockerfile
+    container_name: mdws_workers
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+  websockets:
+    build:
+      context: ./ws-server # build context is the ws-server folder
+      dockerfile: Dockerfile
+    container_name: mdws_app
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+  redis:
+    image: redis:8.2-alpine
+    container_name: redis-standalone
+    command: >
+      redis-server
+      --appendonly yes
+      --protected-mode no
+      --bind 0.0.0.0
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-data:/data
+    restart: always
+
+  rabbitmq:
+    image: rabbitmq:4.2-management
+    container_name: mdws_rabbitmq
+    ports:
+      - "${RABBITMQ_STREAM_PORT}:5552"
+      - "${RABBITMQ_UI_PORT}:15672"
+      - "${RABBITMQ_AMQP_PORT}:5672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbitmq_stream advertised_host '${RABBITMQ_ADVERTISED_HOST}'
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./enabled_plugins:/etc/rabbitmq/enabled_plugins
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  rabbitmq_data:

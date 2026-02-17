@@ -51,7 +51,7 @@ func LoadEnv() (*Config, error) {
 	cfg := &Config{
 		RedisAddrs:      redisAddrs,
 		RedisPassword:   v.GetString("REDIS_PASSWORD"),
-		AppPort:         v.GetString("APP_PORT"),
+		AppPort:         v.GetString("MDWS_APP_PORT"),
 		SfnodeID:        nodeID,
 		RmqHost:         v.GetString("RABBITMQ_ADVERTISED_HOST"),
 		RmqUsername:     v.GetString("RABBITMQ_DEFAULT_USER"),

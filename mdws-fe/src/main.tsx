@@ -10,8 +10,9 @@ import reportWebVitals from './reportWebVitals.ts'
 import { MarketSocketProvider } from './context/MktSocketCtx.tsx'
 import { TickerProvider } from './context/TickersCtx.tsx'
 
-import {  useMarketSocket } from '@hooks/useMarketWs'
-import type {MarketSocket} from '@hooks/useMarketWs';
+import { useMarketSocket } from '@hooks/useMarketWs'
+import type { MarketSocket } from '@hooks/useMarketWs'
+import { Link } from 'lucide-react'
 
 export interface RouterContext {
   socket: MarketSocket
@@ -27,6 +28,14 @@ const router = createRouter({
   scrollRestoration: true,
   defaultStructuralSharing: true,
   defaultPreloadStaleTime: 0,
+  defaultNotFoundComponent: () => {
+    return (
+      <div>
+        <p>Not found!</p>
+        <Link to="/">Go home</Link>
+      </div>
+    )
+  },
 })
 
 // Register the router instance for type safety

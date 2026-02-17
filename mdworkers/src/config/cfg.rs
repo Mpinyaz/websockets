@@ -12,9 +12,6 @@ pub struct Config {
     pub stream_password: String,
     pub feed_stream: String,
     pub subscribe_stream: String,
-    pub forex_tickers: Vec<String>,
-    pub equity_tickers: Vec<String>,
-    pub crypto_tickers: Vec<String>,
 }
 
 pub enum ConfigError {
@@ -46,15 +43,6 @@ impl Config {
         let get_env =
             |key: &str| std::env::var(key).map_err(|_| ConfigError::NotFound(key.to_string()));
 
-        let get_tickers = |key: &str| -> Result<Vec<String>, ConfigError> {
-            let val = std::env::var(key).map_err(|_| ConfigError::NotFound(key.to_string()))?;
-            Ok(val
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect())
-        };
-
         Ok(Config {
             data_url: get_env("TIINGO_WS_URL")?,
             data_api_key: get_env("TIINGO_API_KEY")?,
@@ -66,9 +54,6 @@ impl Config {
             stream_password: get_env("RABBITMQ_DEFAULT_PASS")?,
             feed_stream: get_env("MDWS_FEED_STREAM")?,
             subscribe_stream: get_env("MDWS_SUBSCRIBE_STREAM")?,
-            equity_tickers: get_tickers("EQUITY_TICKERS")?,
-            forex_tickers: get_tickers("FOREX_TICKERS")?,
-            crypto_tickers: get_tickers("CRYPTO_TICKERS")?,
         })
     }
 }

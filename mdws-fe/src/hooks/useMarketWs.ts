@@ -1,7 +1,10 @@
 // hooks/useMarketSocket.ts
 import useWebSocket, { ReadyState } from 'react-use-websocket'
 import type { WsEvent } from '../types/event'
-import type { SubscribePayload } from '../types/subscriptions'
+import type {
+  SubscribePayload,
+  UnsubscribePayload,
+} from '../types/subscriptions'
 import type { WebSocketLike } from 'react-use-websocket/dist/lib/types'
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8080/ws'
