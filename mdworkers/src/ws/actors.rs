@@ -7,7 +7,7 @@ use crate::types::{
 use futures_util::{SinkExt, StreamExt};
 use serde_json;
 use tokio::sync::mpsc;
-use tokio::time::{self, Duration};
+use tokio::time::Duration;
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tracing::{error, info};
 
