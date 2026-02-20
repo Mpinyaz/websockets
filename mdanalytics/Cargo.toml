@@ -4,6 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+chrono = { version = "0.4.41", features = [] }
 influxdb = { version = "0.7.2", features = ["derive"] }
 plotters = "0.3.7"
-polars = { version = "0.52.0", features = ["lazy", "csv", "serde"] }
+polars = { version = "0.53.0", features = [
+  "describe",
+  "lazy",
+  "ndarray",
+  "object",
+  "dtype-struct",
+  "concat_str",
+  "mode",
+] }

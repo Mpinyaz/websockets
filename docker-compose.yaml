@@ -12,9 +12,12 @@ services:
       websockets:
         condition: service_started
     restart: unless-stopped
+    networks:
+      - app-network
+
   mdwsworkers:
     build:
-      context: ./mdworkers # build context is the ws-server folder
+      context: ./mdworkers
       dockerfile: Dockerfile
     container_name: mdws_workers
     env_file:
@@ -23,9 +26,11 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - app-network
   websockets:
     build:
-      context: ./ws-server # build context is the ws-server folder
+      context: ./ws-server
       dockerfile: Dockerfile
     container_name: mdws_app
     env_file:
@@ -38,6 +43,9 @@ services:
       redis:
         condition: service_started
     restart: unless-stopped
+    networks:
+      - app-network
+
   redis:
     image: redis:8.2-alpine
     container_name: redis-standalone
@@ -51,6 +59,8 @@ services:
     volumes:
       - redis-data:/data
     restart: always
+    networks:
+      - app-network
 
   rabbitmq:
     image: rabbitmq:4.2-management
@@ -62,17 +72,68 @@ services:
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
-      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbitmq_stream advertised_host '${RABBITMQ_ADVERTISED_HOST}'
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit_stream advertised_host rabbitmq -rabbitmq_management enable_guest_login_from_remote true
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
       - ./enabled_plugins:/etc/rabbitmq/enabled_plugins
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "rabbitmq-diagnostics -q ping && rabbitmq-plugins is_enabled rabbitmq_stream",
+        ]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
     restart: unless-stopped
+    networks:
+      - app-network
+
+  influxdb2:
+    image: influxdb:2
+    container_name: influxdb2
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME_FILE: /run/secrets/influxdb2-admin-username
+      DOCKER_INFLUXDB_INIT_PASSWORD_FILE: /run/secrets/influxdb2-admin-password
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN_FILE: /run/secrets/influxdb2-admin-token
+      DOCKER_INFLUXDB_INIT_ORG: mdws
+      DOCKER_INFLUXDB_INIT_BUCKET: marketupdates
+    secrets:
+      - influxdb2-admin-username
+      - influxdb2-admin-password
+      - influxdb2-admin-token
+    volumes:
+      - type: volume
+        source: influxdb2-data
+        target: /var/lib/influxdb2
+      - type: volume
+        source: influxdb2-config
+        target: /etc/influxdb2
+    restart: unless-stopped
+    networks:
+      - app-network
+
+
+
+secrets:
+  influxdb2-admin-username:
+    file: ~/.env.influxdb2-admin-username
+  influxdb2-admin-password:
+    file: ~/.env.influxdb2-admin-password
+  influxdb2-admin-token:
+    file: ~/.env.influxdb2-admin-token
 
 volumes:
   redis-data:
   rabbitmq_data:
+  influxdb2-data:
+  influxdb2-config:
+
+networks:
+  app-network:
+    driver: bridge

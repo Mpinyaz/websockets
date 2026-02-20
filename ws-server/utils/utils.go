@@ -20,6 +20,10 @@ type Config struct {
 	RmqMarketUpdate string
 	RmqMarketSubs   string
 	RmqPort         int
+	InfluxDBURL     string // New: InfluxDB URL
+	InfluxDBToken   string // New: InfluxDB Token
+	InfluxDBOrg     string // New: InfluxDB Organization
+	InfluxDBBucket  string // New: InfluxDB Bucket
 }
 
 func LoadEnv() (*Config, error) {
@@ -59,6 +63,10 @@ func LoadEnv() (*Config, error) {
 		RmqMarketUpdate: v.GetString("MDWS_FEED_STREAM"),
 		RmqMarketSubs:   v.GetString("MDWS_SUBSCRIBE_STREAM"),
 		RmqPort:         int(rmqPort),
+		InfluxDBURL:     v.GetString("INFLUXDB_URL"),
+		InfluxDBToken:   v.GetString("INFLUXDB_TOKEN"),
+		InfluxDBOrg:     v.GetString("INFLUXDB_ORG"),
+		InfluxDBBucket:  v.GetString("INFLUXDB_BUCKET"),
 	}
 
 	return cfg, nil

@@ -1,12 +1,13 @@
 use anyhow::Result;
+use rabbitmq_stream_client::NoDedup;
+use rabbitmq_stream_client::{error::StreamCreateError, Environment, Producer};
 use rabbitmq_stream_client::{
-    Consumer,
     types::{ByteCapacity, ResponseCode, StreamCreator},
+    Consumer,
 };
-use rabbitmq_stream_client::{Environment, Producer};
-use rabbitmq_stream_client::{NoDedup, error::StreamCreateError};
 use tokio::sync::OnceCell;
-use tracing::info;
+use tokio::time::sleep;
+use tracing::{error, info};
 
 use crate::config::cfg::Config;
 
@@ -45,22 +46,47 @@ async fn init_stream_entities() -> Result<StreamEntities> {
         .max_age(std::time::Duration::from_secs(3600 * 24 * 3));
     init_stream(subscribe_env, &config.subscribe_stream).await?;
 
-    let mkt_feed_producer = environment.producer().build(&config.feed_stream).await?;
+    const MAX_RETRIES: u32 = 5;
+    const RETRY_DELAY_SECS: u64 = 5;
 
-    let mkt_sub_producer = environment
-        .producer()
-        .build(&config.subscribe_stream)
-        .await?;
+    for attempt in 1..=MAX_RETRIES {
+        info!("Creating producers, attempt {}/{}", attempt, MAX_RETRIES);
 
-    info!(
-        "Stream producers initialized: feed={}, subs={}",
-        &config.feed_stream, &config.subscribe_stream
-    );
+        let producers_result: Result<_, anyhow::Error> = async {
+            let mkt_feed_producer = environment.producer().build(&config.feed_stream).await?;
+            let mkt_sub_producer = environment
+                .producer()
+                .build(&config.subscribe_stream)
+                .await?;
+            Ok((mkt_feed_producer, mkt_sub_producer))
+        }
+        .await;
 
-    Ok(StreamEntities {
-        mkt_feed_producer,
-        mkt_sub_producer,
-    })
+        match producers_result {
+            Ok((mkt_feed_producer, mkt_sub_producer)) => {
+                info!(
+                    "Stream producers initialized: feed={}, subs={}",
+                    &config.feed_stream, &config.subscribe_stream
+                );
+                return Ok(StreamEntities {
+                    mkt_feed_producer,
+                    mkt_sub_producer,
+                });
+            }
+            Err(e) => {
+                error!(
+                    "Failed to create producers (attempt {}/{}): {}. Retrying in {}s...",
+                    attempt, MAX_RETRIES, e, RETRY_DELAY_SECS
+                );
+                if attempt == MAX_RETRIES {
+                    return Err(e);
+                }
+                sleep(std::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
+            }
+        }
+    }
+
+    unreachable!();
 }
 
 pub async fn create_sub_consumer() -> Result<Consumer> {
