@@ -1,12 +1,13 @@
 pub mod api;
-pub mod models;
+pub mod types;
 pub mod utils;
 use crate::{
-    models::AppState,
+    types::AppState,
     utils::{init_redis_conn, init_tracing, AppConfig},
 };
 use axum::{routing::post, Router};
 use influxdb::Client;
+use redis::aio::ConnectionManager;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
@@ -19,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new(&cfg.db_url, &cfg.db_bucket).with_token(cfg.db_token);
     info!("Successfully connected to influx db: {}", &cfg.db_url);
 
-    let redis = init_redis_conn(&cfg.redis_url)
+    let redis: ConnectionManager = init_redis_conn(&cfg.redis_url)
         .await
         .expect("Failed to connect to Redis");
     info!("Succesfully connected to redis client: {}", &cfg.redis_url);

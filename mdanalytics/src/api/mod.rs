@@ -11,13 +11,13 @@ use influxdb::ReadQuery;
 use mdanalytics::dataframe_to_json_value;
 use mdanalytics::json_to_dataframe;
 use polars::prelude::*;
+use redis::AsyncCommands;
 use serde_json::Value; // Added this line back
 use snowflake_me::Snowflake;
 use std::{convert::Infallible, time::Duration};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 use tracing::info;
-use redis::AsyncCommands;
 
 pub async fn submit_job() -> Result<Json<serde_json::Value>, ApiError> {
     let sf = Snowflake::new()?;
@@ -58,7 +58,12 @@ pub async fn sse_handler(
                     JobEvent::Completed { .. } => "completed",
                     JobEvent::Failed { .. } => "failed",
                 };
-                let data = serde_json::to_string(&event).unwrap();
+                let json_data = match &event {
+                    JobEvent::Processing => serde_json::json!({"status": "processing"}),
+                    JobEvent::Completed { result } => serde_json::json!({"status": "completed", "result": result}),
+                    JobEvent::Failed { error } => serde_json::json!({"status": "failed", "error": error}),
+                };
+                let data = serde_json::to_string(&json_data).unwrap();
                 Some(Ok(Event::default().event(name).data(data)))
             }
             Err(_) => None,
@@ -128,8 +133,8 @@ async fn handle_analyze(
         analysis_response.job_id = job_id.clone();
         let final_analysis_result = serde_json::to_value(&analysis_response)?;
         Ok(final_analysis_result)
-    }).await;
-
+    })
+    .await;
 
     match result {
         Ok(final_analysis_result) => {
@@ -189,6 +194,7 @@ async fn fetch_and_process_data(
         AssetClass::Forex => {
             json_to_dataframe(&raw_data, &["bid_price", "ask_price", "mid_price"])?
         }
+        AssetClass::Equity => todo!(),
     };
 
     if df.height() == 0 {

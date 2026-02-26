@@ -2,7 +2,7 @@ use tracing_error::ErrorLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use crate::models::ApiError;
+use crate::types::ApiError;
 use redis::aio::ConnectionManager;
 
 pub struct AppConfig {

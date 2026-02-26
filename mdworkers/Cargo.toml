@@ -12,6 +12,9 @@ keywords = ["rabbitmq", "websockets"]
 name = "server"
 path = "src/bin/server.rs"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 tokio-tungstenite = { version = "0.28", features = ["native-tls"] }
 tokio = { version = "1.47.1", features = ["full"] }

@@ -1,3 +1,4 @@
+pub mod types;
 use polars::prelude::*;
 use serde_json::Value;
 use std::io::Cursor;
