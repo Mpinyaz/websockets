@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	. "websockets/utils"
@@ -216,46 +217,45 @@ func handleMktUpdate(
 		log.Println("Tiingo heartbeat received")
 
 	case "A": // Actual market update
-
-		var arr []interface{}
-		if err := json.Unmarshal(payload.Data, &arr); err != nil {
-			log.Printf(
-				"expected array payload for service=%s, got %s",
-				payload.Service,
-				string(payload.Data),
-			)
-			return
-		}
-
-		switch payload.Service {
-		case "fx":
-			var fx TiingoForexData
-			if err := parseForexArray(arr, &fx); err != nil {
-				log.Printf("Forex parse error: %v", err)
+		// Tiingo still uses arrays for FX and Crypto
+		if payload.Service == "fx" || payload.Service == "crypto_data" {
+			var arr []interface{}
+			if err := json.Unmarshal(payload.Data, &arr); err != nil {
+				log.Printf("expected array payload for service=%s, got %s", payload.Service, string(payload.Data))
 				return
 			}
-			eventPayload = fx
-			assetClass = "forex"
 
-		case "crypto_data":
-			var c TiingoCryptoData
-			if err := parseCryptoArray(arr, &c); err != nil {
-				log.Printf("Crypto parse error: %v", err)
+			switch payload.Service {
+			case "fx":
+				var fx TiingoForexData
+				if err := parseForexArray(arr, &fx); err != nil {
+					log.Printf("Forex parse error: %v", err)
+					return
+				}
+				eventPayload = fx
+				assetClass = "forex"
+
+			case "crypto_data":
+				var c TiingoCryptoData
+				if err := parseCryptoArray(arr, &c); err != nil {
+					log.Printf("Crypto parse error: %v", err)
+					return
+				}
+				eventPayload = c
+				assetClass = "crypto_data"
+			}
+		} else if payload.Service == "alpaca-iex" {
+			var eq EquityUpdate
+			isUpdate, err := parseAlpacaObject(payload.Data, &eq)
+			if err != nil {
+				log.Printf("Alpaca parse error: %v", err)
 				return
 			}
-			eventPayload = c
-			assetClass = "crypto"
-
-		case "iex":
-			var eq TiingoEquityData
-			if err := parseEquityArray(arr, &eq); err != nil {
-				log.Printf("Equity parse error: %v", err)
-				return
+			if isUpdate {
+				eventPayload = eq
+				assetClass = "equity"
 			}
-			eventPayload = eq
-			assetClass = "equity"
-
-		default:
+		} else {
 			log.Printf("Unknown service in update: %s", payload.Service)
 		}
 
@@ -298,19 +298,18 @@ func handleMktUpdate(
 				timestamp = parsedTime
 			}
 		case TiingoCryptoData:
-			measurement = "crypto"
+			measurement = "crypto_data"
 			tags["ticker"] = v.Ticker
 			tags["exchange"] = v.Exchange
 			tags["update_type"] = v.UpdateType
 			fields["last_size"] = v.LastSize
 			fields["last_price"] = v.LastPrice
 			timestamp = v.Date
-		case TiingoEquityData:
+		case EquityUpdate:
 			measurement = "equity"
 			tags["ticker"] = v.Ticker
 			tags["update_type"] = v.UpdateType
 
-			// Handle optional fields for equity
 			if v.BidSize != nil {
 				fields["bid_size"] = *v.BidSize
 			}
@@ -332,19 +331,43 @@ func handleMktUpdate(
 			if v.LastSize != nil {
 				fields["last_size"] = *v.LastSize
 			}
-
-			fields["halted"] = v.Halted
-			fields["after_hours"] = v.AfterHours
-			fields["iso"] = v.ISO
-			if v.Oddlot != nil {
-				fields["oddlot"] = *v.Oddlot
+			if v.Open != nil {
+				fields["open"] = *v.Open
 			}
-			if v.NMSRule611 != nil {
-				fields["nms_rule_611"] = *v.NMSRule611
+			if v.High != nil {
+				fields["high"] = *v.High
 			}
-			fields["nanos"] = v.Nanos // InfluxDB can handle int64
+			if v.Low != nil {
+				fields["low"] = *v.Low
+			}
+			if v.Close != nil {
+				fields["close"] = *v.Close
+			}
+			if v.Volume != nil {
+				fields["volume"] = *v.Volume
+			}
+			if v.TradeID != nil {
+				fields["tradeId"] = *v.TradeID
+			}
+			if v.TradeCount != nil {
+				fields["tradeCount"] = *v.TradeCount
+			}
+			if v.VWAP != nil {
+				fields["vwap"] = *v.VWAP
+			}
 
-			timestamp = v.Date // InfluxDB client will use this time
+			if v.Exchange != "" {
+				tags["exchange"] = v.Exchange
+			}
+			if v.Tape != "" {
+				tags["tape"] = v.Tape
+			}
+			if len(v.Conditions) > 0 {
+				tags["conditions"] = fmt.Sprintf("%v", v.Conditions)
+			}
+
+			fields["nanoseconds"] = v.Nanos
+			timestamp = v.Date
 		default:
 			log.Printf("Unknown eventPayload type: %+v", eventPayload)
 			return
@@ -478,10 +501,12 @@ func parseCryptoArray(data []interface{}, out *TiingoCryptoData) error {
 		return fmt.Errorf("crypto array too short, got %d elements", len(data))
 	}
 
-	// Index 0: UpdateType
-	if s, ok := data[0].(string); ok {
-		out.UpdateType = s
+	// Index 0: UpdateType ("T" for Trade, "Q" for Quote)
+	updateType, ok := data[0].(string)
+	if !ok {
+		return fmt.Errorf("crypto update type is not a string")
 	}
+	out.UpdateType = updateType
 
 	// Index 1: Ticker
 	if s, ok := data[1].(string); ok {
@@ -490,7 +515,7 @@ func parseCryptoArray(data []interface{}, out *TiingoCryptoData) error {
 
 	// Index 2: Date
 	if s, ok := data[2].(string); ok {
-		t, err := time.Parse(time.RFC3339, s)
+		t, err := time.Parse(time.RFC3339Nano, s)
 		if err != nil {
 			return fmt.Errorf("invalid crypto date: %w", err)
 		}
@@ -502,129 +527,133 @@ func parseCryptoArray(data []interface{}, out *TiingoCryptoData) error {
 		out.Exchange = s
 	}
 
-	// Index 4: LastSize
-	if f, ok := data[4].(float64); ok {
-		out.LastSize = f
-	}
-
-	// Index 5: LastPrice
-	if f, ok := data[5].(float64); ok {
-		out.LastPrice = f
+	if updateType == "T" {
+		// Index 4: LastSize
+		if f, ok := data[4].(float64); ok {
+			out.LastSize = f
+		}
+		// Index 5: LastPrice
+		if f, ok := data[5].(float64); ok {
+			out.LastPrice = f
+		}
+	} else if updateType == "Q" {
+		// For Quotes, Tiingo sends: ["Q", ticker, date, exchange, bidSize, bidPrice, midPrice, askSize, askPrice]
+		// We'll map midPrice to LastPrice for simplified display in the current TickerTable
+		if len(data) >= 9 {
+			if f, ok := data[6].(float64); ok {
+				out.LastPrice = f
+			}
+			if f, ok := data[4].(float64); ok {
+				out.LastSize = f // Using bidSize as a proxy for size in the simple struct
+			}
+		}
 	}
 
 	return nil
 }
 
 // ----------------------------
-// Equity parser
+// Alpaca parser
 // ----------------------------
-func parseEquityArray(raw []interface{}, eq *TiingoEquityData) error {
-	if len(raw) < 16 {
-		return fmt.Errorf("expected at least 16 fields for equity, got %d", len(raw))
+func parseAlpacaObject(data []byte, eq *EquityUpdate) (bool, error) {
+	var rawMap map[string]json.RawMessage
+	if err := json.Unmarshal(data, &rawMap); err != nil {
+		return false, fmt.Errorf("failed to unmarshal Alpaca payload into raw map: %w", err)
 	}
 
-	strAssert := func(i int) (string, error) {
-		if s, ok := raw[i].(string); ok {
-			return s, nil
-		}
-		return "", fmt.Errorf("field %d is not a string", i)
-	}
-	floatAssert := func(i int) (*float64, error) {
-		if raw[i] == nil {
-			return nil, nil
-		}
-		if f, ok := raw[i].(float64); ok {
-			return &f, nil
-		}
-		return nil, fmt.Errorf("field %d is not a float64", i)
-	}
-	intAssert := func(i int) (*int32, error) {
-		if raw[i] == nil {
-			return nil, nil
-		}
-		if f, ok := raw[i].(float64); ok {
-			v := int32(f)
-			return &v, nil
-		}
-		return nil, fmt.Errorf("field %d is not an int32", i)
-	}
-	timeAssert := func(i int) (time.Time, error) {
-		if s, ok := raw[i].(string); ok {
-			return time.Parse(time.RFC3339, s)
-		}
-		return time.Time{}, fmt.Errorf("field %d is not a valid timestamp string", i)
+	alpacaTypeRaw, ok := rawMap["T"]
+	if !ok {
+		return false, fmt.Errorf("Alpaca payload missing 'T' (type) field: %s", string(data))
 	}
 
-	var err error
-	if eq.UpdateType, err = strAssert(0); err != nil {
-		return err
-	}
-	if eq.Date, err = timeAssert(1); err != nil {
-		return err
+	var alpacaType string
+	if err := json.Unmarshal(alpacaTypeRaw, &alpacaType); err != nil {
+		return false, fmt.Errorf("failed to unmarshal Alpaca message type 'T': %w", err)
 	}
 
-	if f, ok := raw[2].(float64); ok {
-		eq.Nanos = int64(f)
+	eq.UpdateType = strings.ToUpper(alpacaType)
+
+	var timestampStr string
+	timestampRaw, ok := rawMap["t"]
+	if ok {
+		if err := json.Unmarshal(timestampRaw, &timestampStr); err != nil {
+			log.Printf("failed to unmarshal Alpaca timestamp 't': %v", err)
+			// Proceed without timestamp if it cannot be parsed
+		}
+	}
+
+	switch alpacaType {
+	case "t": // Trade
+		var trade AlpacaTrade
+		if err := json.Unmarshal(data, &trade); err != nil {
+			return false, fmt.Errorf("failed to parse Alpaca trade: %w", err)
+		}
+		eq.Ticker = trade.Symbol
+		eq.LastPrice = &trade.Price
+		eq.LastSize = &trade.Size
+		eq.TradeID = &trade.TradeID
+		eq.Exchange = trade.Exchange
+		eq.Tape = trade.Tape
+		eq.Conditions = trade.Conditions
+		// Use the timestampStr explicitly extracted
+		if timestampStr == "" { // Fallback if explicit extraction failed
+			timestampStr = trade.Timestamp
+		}
+
+	case "q": // Quote
+		var quote AlpacaQuote
+		if err := json.Unmarshal(data, &quote); err != nil {
+			return false, fmt.Errorf("failed to parse Alpaca quote: %w", err)
+		}
+		eq.Ticker = quote.Symbol
+		eq.BidPrice = &quote.BidPrice
+		eq.BidSize = &quote.BidSize
+		eq.AskPrice = &quote.AskPrice
+		eq.AskSize = &quote.AskSize
+		eq.BidExchange = quote.BidExchange
+		eq.AskExchange = quote.AskExchange
+		eq.Conditions = quote.Conditions
+		eq.Tape = quote.Tape
+		// Use the timestampStr explicitly extracted
+		if timestampStr == "" { // Fallback if explicit extraction failed
+			timestampStr = quote.Timestamp
+		}
+		if eq.BidPrice != nil && eq.AskPrice != nil {
+			mid := (*eq.BidPrice + *eq.AskPrice) / 2
+			eq.MidPrice = &mid
+		}
+	case "b": // Bar
+		var bar AlpacaBar
+		if err := json.Unmarshal(data, &bar); err != nil {
+			return false, fmt.Errorf("failed to parse Alpaca bar: %w", err)
+		}
+		eq.Ticker = bar.Symbol
+		eq.Open = &bar.Open
+		eq.High = &bar.High
+		eq.Low = &bar.Low
+		eq.Close = &bar.Close
+		eq.Volume = &bar.Volume
+		eq.TradeCount = &bar.TradeCount
+		eq.VWAP = &bar.VWAP
+		// Use the timestampStr explicitly extracted
+		if timestampStr == "" { // Fallback if explicit extraction failed
+			timestampStr = bar.Timestamp
+		}
+	case "d", "u", "c", "x", "l", "s", "i": // Other known message types
+		log.Printf("Received known but unhandled Alpaca message type: %s", alpacaType)
+		return false, nil // Not an error, not a data update
+	default:
+		return false, fmt.Errorf("unknown Alpaca message type: %s", alpacaType)
+	}
+
+	// This part now only runs for t, q, b
+	parsedTime, err := time.Parse(time.RFC3339Nano, timestampStr)
+	if err != nil {
+		log.Printf("could not parse Alpaca timestamp '%s': %v", timestampStr, err)
 	} else {
-		return fmt.Errorf("field 2 is not float64")
+		eq.Date = parsedTime
+		eq.Nanos = parsedTime.UnixNano()
 	}
 
-	if eq.Ticker, err = strAssert(3); err != nil {
-		return err
-	}
-
-	if eq.BidSize, err = intAssert(4); err != nil {
-		return err
-	}
-	if eq.BidPrice, err = floatAssert(5); err != nil {
-		return err
-	}
-	if eq.MidPrice, err = floatAssert(6); err != nil {
-		return err
-	}
-	if eq.AskPrice, err = floatAssert(7); err != nil {
-		return err
-	}
-	if eq.AskSize, err = intAssert(8); err != nil {
-		return err
-	}
-	if eq.LastPrice, err = floatAssert(9); err != nil {
-		return err
-	}
-	if eq.LastSize, err = intAssert(10); err != nil {
-		return err
-	}
-
-	// Trading state fields
-
-	if f, ok := raw[11].(float64); ok {
-		eq.Halted = int32(f)
-	} else {
-		return fmt.Errorf("field 11 is not float64")
-	}
-
-	if f, ok := raw[12].(float64); ok {
-		eq.AfterHours = int32(f)
-	} else {
-		return fmt.Errorf("field 12 is not float64")
-	}
-	if f, ok := raw[12].(float64); ok {
-		eq.AfterHours = int32(f)
-	} else {
-		return fmt.Errorf("field 12 is not float64")
-	}
-	if f, ok := raw[13].(float64); ok {
-		eq.ISO = int32(f)
-	} else {
-		return fmt.Errorf("field 12 is not float64")
-	}
-
-	if eq.Oddlot, err = intAssert(14); err != nil {
-		return err
-	}
-	if eq.NMSRule611, err = intAssert(15); err != nil {
-		return err
-	}
-
-	return nil
+	return true, nil
 }

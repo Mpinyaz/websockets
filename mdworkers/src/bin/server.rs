@@ -1,9 +1,9 @@
 use anyhow::Result;
-use mdworkers::config::cfg::Config;
-use mdworkers::services::streams::get_stream_entities;
+use mdworkers::config::Config;
+use mdworkers::streams::get_stream_entities;
+use mdworkers::streams::handlers::run_sub_consumer;
 use mdworkers::types::client::Client;
-use mdworkers::ws::actors::spawn_ws_actors;
-use mdworkers::ws::handlers::run_sub_consumer;
+use mdworkers::ws::spawn_ws_actors;
 use tracing::{error, info};
 
 #[tokio::main]

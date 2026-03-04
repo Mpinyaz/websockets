@@ -40,6 +40,12 @@ const TickerTable = ({
         return (
           <>
             <tr className="border-b border-gray-700">
+              <td className="font-bold p-2">Type</td>
+              <td className="p-2 text-right">
+                {cryptoData.update_type === 'T' ? 'Trade' : 'Quote'}
+              </td>
+            </tr>
+            <tr className="border-b border-gray-700">
               <td className="font-bold p-2">Time</td>
               <td className="p-2 text-right">{cryptoData.date}</td>
             </tr>
@@ -116,9 +122,65 @@ const TickerTable = ({
         return (
           <>
             <tr className="border-b border-gray-700">
+              <td className="font-bold p-2">Type</td>
+              <td className="p-2 text-right">{equityData.updateType}</td>
+            </tr>
+            <tr className="border-b border-gray-700">
               <td className="font-bold p-2">Time</td>
               <td className="p-2 text-right">{equityData.date}</td>
             </tr>
+            {equityData.open && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">Open</td>
+                <td className="p-2 text-right">
+                  ${equityData.open.toLocaleString()}
+                </td>
+              </tr>
+            )}
+            {equityData.high && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">High</td>
+                <td className="p-2 text-right">
+                  ${equityData.high.toLocaleString()}
+                </td>
+              </tr>
+            )}
+            {equityData.low && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">Low</td>
+                <td className="p-2 text-right">
+                  ${equityData.low.toLocaleString()}
+                </td>
+              </tr>
+            )}
+            {equityData.close && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">Close</td>
+                <td className="p-2 text-right">
+                  ${equityData.close.toLocaleString()}
+                </td>
+              </tr>
+            )}
+            {equityData.volume && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">Volume</td>
+                <td className="p-2 text-right">{equityData.volume.toLocaleString()}</td>
+              </tr>
+            )}
+            {equityData.vwap && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">VWAP</td>
+                <td className="p-2 text-right">
+                  ${equityData.vwap.toLocaleString()}
+                </td>
+              </tr>
+            )}
+            {equityData.tradeCount && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">Trade Count</td>
+                <td className="p-2 text-right">{equityData.tradeCount.toLocaleString()}</td>
+              </tr>
+            )}
             {equityData.lastPrice && (
               <tr className="border-b border-gray-700">
                 <td className="font-bold p-2">Last Price</td>
@@ -130,7 +192,19 @@ const TickerTable = ({
             {equityData.lastSize && (
               <tr className="border-b border-gray-700">
                 <td className="font-bold p-2">Last Size</td>
-                <td className="p-2 text-right">{equityData.lastSize}</td>
+                <td className="p-2 text-right">{equityData.lastSize.toLocaleString()}</td>
+              </tr>
+            )}
+            {equityData.tradeId && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">Trade ID</td>
+                <td className="p-2 text-right">{equityData.tradeId.toLocaleString()}</td>
+              </tr>
+            )}
+            {equityData.exchange && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">Exchange</td>
+                <td className="p-2 text-right">{equityData.exchange}</td>
               </tr>
             )}
             {equityData.bidPrice && (
@@ -144,7 +218,21 @@ const TickerTable = ({
             {equityData.bidSize && (
               <tr className="border-b border-gray-700">
                 <td className="font-bold p-2">Bid Size</td>
-                <td className="p-2 text-right">{equityData.bidSize}</td>
+                <td className="p-2 text-right">{equityData.bidSize.toLocaleString()}</td>
+              </tr>
+            )}
+            {equityData.bidExchange && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">Bid Exchange</td>
+                <td className="p-2 text-right">{equityData.bidExchange}</td>
+              </tr>
+            )}
+            {equityData.midPrice && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">Mid Price</td>
+                <td className="p-2 text-right">
+                  ${equityData.midPrice.toLocaleString()}
+                </td>
               </tr>
             )}
             {equityData.askPrice && (
@@ -158,7 +246,25 @@ const TickerTable = ({
             {equityData.askSize && (
               <tr className="border-b border-gray-700">
                 <td className="font-bold p-2">Ask Size</td>
-                <td className="p-2 text-right">{equityData.askSize}</td>
+                <td className="p-2 text-right">{equityData.askSize.toLocaleString()}</td>
+              </tr>
+            )}
+            {equityData.askExchange && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">Ask Exchange</td>
+                <td className="p-2 text-right">{equityData.askExchange}</td>
+              </tr>
+            )}
+            {equityData.tape && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">Tape</td>
+                <td className="p-2 text-right">{equityData.tape}</td>
+              </tr>
+            )}
+            {equityData.conditions && equityData.conditions.length > 0 && (
+              <tr className="border-b border-gray-700">
+                <td className="font-bold p-2">Conditions</td>
+                <td className="p-2 text-right">{equityData.conditions.join(', ')}</td>
               </tr>
             )}
           </>

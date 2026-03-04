@@ -38,30 +38,78 @@ type TiingoForexData struct {
 	AskSize   float64 `json:"askSize"`   // Index 7: Number of units at ask
 }
 
-// TiingoEquityData represents a single market update from IEX/Tiingo
-type TiingoEquityData struct {
-	UpdateType string    `json:"update_type"` // "T" = trade, "Q" = quote, "B" = break
-	Date       time.Time `json:"date"`        // ISO timestamp from IEX
-	Nanos      int64     `json:"nanoseconds"` // Nanoseconds since POSIX epoch
+// EquityUpdate represents a single market update for equities, primarily from Alpaca,
+// with descriptive camelCase field names for frontend compatibility.
+type EquityUpdate struct {
+	UpdateType string    `json:"updateType"` // "T" = trade, "Q" = quote, "B" = bar
+	Date       time.Time `json:"date"`       // RFC3339 timestamp
+	Nanos      int64     `json:"nanoseconds"`
 	Ticker     string    `json:"ticker"`
 
-	// Quote fields (only for Q)
-	BidSize  *int32   `json:"bid_size,omitempty"`
-	BidPrice *float64 `json:"bid_price,omitempty"`
-	MidPrice *float64 `json:"mid_price,omitempty"`
-	AskPrice *float64 `json:"ask_price,omitempty"`
-	AskSize  *int32   `json:"ask_size,omitempty"`
+	// Quote fields
+	BidSize     *float64 `json:"bidSize,omitempty"`
+	BidPrice    *float64 `json:"bidPrice,omitempty"`
+	MidPrice    *float64 `json:"midPrice,omitempty"`
+	AskPrice    *float64 `json:"askPrice,omitempty"`
+	AskSize     *float64 `json:"askSize,omitempty"`
+	BidExchange string   `json:"bidExchange,omitempty"`
+	AskExchange string   `json:"askExchange,omitempty"`
 
-	// Trade / Break fields (only for T / B)
-	LastPrice *float64 `json:"last_price,omitempty"`
-	LastSize  *int32   `json:"last_size,omitempty"`
+	// Trade fields
+	LastPrice *float64 `json:"lastPrice,omitempty"`
+	LastSize  *float64 `json:"lastSize,omitempty"`
+	TradeID   *uint64  `json:"tradeId,omitempty"`
+	Exchange  string   `json:"exchange,omitempty"` // Original 'x' from Alpaca
 
-	// Trading state
-	Halted     int32  `json:"halted"`                 // 1 if halted, 0 otherwise
-	AfterHours int32  `json:"after_hours"`            // 1 if after hours
-	ISO        int32  `json:"iso"`                    // Intermarket Sweep Order
-	Oddlot     *int32 `json:"oddlot,omitempty"`       // only for trade
-	NMSRule611 *int32 `json:"nms_rule_611,omitempty"` // only for trade
+	// Bar fields
+	Open       *float64 `json:"open,omitempty"`
+	High       *float64 `json:"high,omitempty"`
+	Low        *float64 `json:"low,omitempty"`
+	Close      *float64 `json:"close,omitempty"`
+	Volume     *float64 `json:"volume,omitempty"`
+	TradeCount *uint64  `json:"tradeCount,omitempty"`
+	VWAP       *float64 `json:"vwap,omitempty"`
+
+	// Common
+	Conditions []string `json:"conditions,omitempty"` // Original 'c' from Alpaca
+	Tape       string   `json:"tape,omitempty"`       // Original 'z' from Alpaca
+}
+
+// Alpaca-specific structs to aid in initial unmarshaling
+type AlpacaTrade struct {
+	Symbol     string   `json:"S"`
+	Price      float64  `json:"p"`
+	Size       float64  `json:"s"`
+	Timestamp  string   `json:"t"`
+	TradeID    uint64   `json:"i"`
+	Exchange   string   `json:"x"`
+	Tape       string   `json:"z"`
+	Conditions []string `json:"c"`
+}
+
+type AlpacaQuote struct {
+	Symbol      string   `json:"S"`
+	BidPrice    float64  `json:"bp"`
+	BidSize     float64  `json:"bs"`
+	AskPrice    float64  `json:"ap"`
+	AskSize     float64  `json:"as"`
+	Timestamp   string   `json:"t"`
+	BidExchange string   `json:"bx"`
+	AskExchange string   `json:"ax"`
+	Conditions  []string `json:"c"`
+	Tape        string   `json:"z"`
+}
+
+type AlpacaBar struct {
+	Symbol     string  `json:"S"`
+	Open       float64 `json:"o"`
+	High       float64 `json:"h"`
+	Low        float64 `json:"l"`
+	Close      float64 `json:"c"`
+	Volume     float64 `json:"v"`
+	Timestamp  string  `json:"t"`
+	TradeCount uint64  `json:"n"`
+	VWAP       float64 `json:"vw"`
 }
 
 type TiingoCryptoData struct {

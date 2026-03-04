@@ -538,13 +538,14 @@ fn render_market_table(
             (header, constraints, rows)
         }
         AssetClass::Crypto => {
-            let header = Row::new(vec!["Ticker", "Price", "Size", "Exchange", "Time"])
+            let header = Row::new(vec!["Ticker", "Type", "Price", "Size", "Exchange", "Time"])
                 .style(Style::default().bold())
                 .height(1);
             let constraints = vec![
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
+                Constraint::Percentage(15),
+                Constraint::Percentage(15),
+                Constraint::Percentage(15),
+                Constraint::Percentage(15),
                 Constraint::Percentage(20),
                 Constraint::Percentage(20),
             ];
@@ -556,11 +557,13 @@ fn render_market_table(
                         date,
                         last_size,
                         exchange,
+                        update_type,
                         ..
                     } = &update.payload
                     {
                         Row::new(vec![
                             ticker.clone(),
+                            if update_type == "T" { "Trade" } else { "Quote" }.to_string(),
                             last_price.to_string(),
                             last_size.to_string(),
                             exchange.clone(),
@@ -579,6 +582,7 @@ fn render_market_table(
                             String::from(""),
                             String::from(""),
                             String::from(""),
+                            String::from(""),
                         ])
                     }
                 })
@@ -586,12 +590,13 @@ fn render_market_table(
             (header, constraints, rows)
         }
         AssetClass::Equity => {
-            let header = Row::new(vec!["Ticker", "Price", "Volume", "Time"])
+            let header = Row::new(vec!["Ticker", "Type", "Price", "Vol/Size", "Time"])
                 .style(Style::default().bold())
                 .height(1);
             let constraints = vec![
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
+                Constraint::Percentage(15),
+                Constraint::Percentage(15),
+                Constraint::Percentage(20),
                 Constraint::Percentage(25),
                 Constraint::Percentage(25),
             ];
@@ -599,27 +604,38 @@ fn render_market_table(
                 .iter()
                 .map(|(ticker, update)| {
                     if let Payload::Equity {
-                        price,
-                        timestamp,
+                        update_type,
+                        last_price,
+                        mid_price,
+                        last_size,
                         volume,
+                        date,
                         ..
                     } = &update.payload
                     {
+                        let price = last_price.or(*mid_price).unwrap_or(0.0);
+                        let vol = last_size.or(*volume).unwrap_or(0.0);
                         Row::new(vec![
                             ticker.clone(),
+                            match update_type.as_str() {
+                                "T" => "Trade",
+                                "Q" => "Quote",
+                                "B" => "Bar",
+                                _ => update_type,
+                            }.to_string(),
                             price.to_string(),
-                            volume.to_string(),
-                            timestamp
-                                .parse::<DateTime<Utc>>()
+                            vol.to_string(),
+                            date.parse::<DateTime<Utc>>()
                                 .map(|dt| {
                                     dt.with_timezone(&Local)
                                         .format("%d/%m/%y %H:%M")
                                         .to_string()
                                 })
-                                .unwrap_or_else(|_| timestamp.clone()),
+                                .unwrap_or_else(|_| date.clone()),
                         ])
                     } else {
                         Row::new(vec![
+                            String::from(""),
                             String::from(""),
                             String::from(""),
                             String::from(""),

@@ -11,7 +11,7 @@ const (
 var assetName = map[AssetClass]string{
 	Forex:  "fx",
 	Equity: "iex",
-	Crypto: "crypto",
+	Crypto: "crypto_data",
 }
 
 func (as AssetClass) String() string {

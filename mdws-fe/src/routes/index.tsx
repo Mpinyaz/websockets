@@ -48,7 +48,8 @@ function Index() {
             setForexUpdates((prev) => processUpdate(prev, forexUpdate))
             break
           }
-          case 'crypto': {
+          case 'crypto':
+          case 'crypto_data': {
             const cryptoUpdate: CryptoUpdate = event.payload as CryptoUpdate
             setCryptoUpdates((prev) => processUpdate(prev, cryptoUpdate))
             break

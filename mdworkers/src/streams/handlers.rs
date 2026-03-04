@@ -1,6 +1,6 @@
-use crate::services::streams::create_sub_consumer;
+use crate::streams::create_sub_consumer;
 use crate::types::{assetclass::AssetClass, message::MsgError};
-use crate::ws::actors::{WsChannels, WsCommand};
+use crate::ws::{WsChannels, WsCommand};
 use futures_util::StreamExt;
 use serde::Deserialize;
 use tracing::{error, info};
@@ -46,7 +46,7 @@ pub async fn run_sub_consumer(channels: WsChannels) -> Result<(), MsgError> {
         };
 
         let payload = match msg.message().data() {
-            Some(d) => d,
+            Some(data) => data,
             None => {
                 error!("Empty subscription message received");
                 continue;

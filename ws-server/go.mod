@@ -12,8 +12,6 @@ require (
 	github.com/spf13/viper v1.21.0
 )
 
-require github.com/rabbitmq/amqp091-go v1.10.0
-
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

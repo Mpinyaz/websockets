@@ -21,25 +21,38 @@ export interface CryptoUpdate {
 }
 
 export interface EquityUpdate {
-  updateType: 'T' | 'Q' | 'B'
-  date: string // ISO
+  updateType: 'T' | 'Q' | 'B' // "T" = trade, "Q" = quote, "B" = bar
+  date: string // RFC3339 timestamp
   nanoseconds: number
   ticker: string
 
+  // Quote fields
   bidSize?: number
   bidPrice?: number
   midPrice?: number
   askPrice?: number
   askSize?: number
+  bidExchange?: string
+  askExchange?: string
 
+  // Trade fields
   lastPrice?: number
   lastSize?: number
+  tradeId?: number
+  exchange?: string
 
-  halted: number
-  afterHours: number
-  iso: number
-  oddlot?: number
-  nmsRule611?: number
+  // Bar fields
+  open?: number
+  high?: number
+  low?: number
+  close?: number
+  volume?: number
+  tradeCount?: number
+  vwap?: number
+
+  // Common
+  conditions?: string[]
+  tape?: string
 }
 
 export type MarketData = ForexUpdate | CryptoUpdate | EquityUpdate

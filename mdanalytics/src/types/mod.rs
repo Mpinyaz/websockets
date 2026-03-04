@@ -32,6 +32,16 @@ pub enum AssetClass {
     Equity,
 }
 
+impl AssetClass {
+    pub fn measurement(&self) -> &'static str {
+        match self {
+            AssetClass::Crypto => "crypto_data",
+            AssetClass::Forex => "forex",
+            AssetClass::Equity => "equity",
+        }
+    }
+}
+
 impl fmt::Display for AssetClass {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -47,7 +57,7 @@ impl FromStr for AssetClass {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "crypto" => Ok(AssetClass::Crypto),
+            "crypto" | "crypto_data" => Ok(AssetClass::Crypto),
             "forex" => Ok(AssetClass::Forex),
             "equity" => Ok(AssetClass::Equity),
             _ => Err(format!("Unknown AssetClass: {}", s)),
@@ -166,6 +176,8 @@ pub struct AnalyzeResponse {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct MarketUpdate {
+    #[serde(rename = "type")]
+    pub event_type: String,
     #[serde(rename = "assetClass")]
     pub asset_class: String,
     pub payload: Payload,
@@ -192,7 +204,7 @@ pub enum Payload {
         ask_size: f64,
     },
     Crypto {
-        update_type: String, // "T"
+        update_type: String, // "T" or "Q"
         ticker: String,
         date: String,
         exchange: String,
@@ -200,11 +212,17 @@ pub enum Payload {
         last_price: f64,
     },
     Equity {
-        update_type: String, // "T"
+        #[serde(rename = "updateType")]
+        update_type: String, // "T", "Q", "B"
         ticker: String,
-        timestamp: String,
-        price: f64,
-        volume: f64,
+        date: String,
+        #[serde(rename = "lastPrice")]
+        last_price: Option<f64>,
+        #[serde(rename = "lastSize")]
+        last_size: Option<f64>,
+        #[serde(rename = "midPrice")]
+        mid_price: Option<f64>,
+        volume: Option<f64>,
     },
 }
 
@@ -372,7 +390,7 @@ impl TuiApp {
     pub fn update_market_data(&mut self, data: MarketUpdate) {
         let (map, ticker) = match data.asset_class.as_str() {
             "forex" => (&mut self.forex, get_ticker_from_payload(&data.payload)),
-            "crypto" => (&mut self.crypto, get_ticker_from_payload(&data.payload)),
+            "crypto" | "crypto_data" => (&mut self.crypto, get_ticker_from_payload(&data.payload)),
             "equity" => (&mut self.equity, get_ticker_from_payload(&data.payload)),
             _ => return,
         };

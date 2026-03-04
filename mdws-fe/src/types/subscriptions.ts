@@ -1,6 +1,6 @@
 import type { WsEvent } from './event'
 
-export type AssetClass = 'forex' | 'equity' | 'crypto'
+export type AssetClass = 'forex' | 'equity' | 'crypto' | 'crypto_data'
 
 export interface SubscribePayload {
   assetClass: AssetClass

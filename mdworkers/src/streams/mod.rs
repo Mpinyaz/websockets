@@ -1,3 +1,4 @@
+pub mod handlers;
 use anyhow::Result;
 use rabbitmq_stream_client::NoDedup;
 use rabbitmq_stream_client::{error::StreamCreateError, Environment, Producer};
@@ -9,7 +10,7 @@ use tokio::sync::OnceCell;
 use tokio::time::sleep;
 use tracing::{error, info};
 
-use crate::config::cfg::Config;
+use crate::config::Config;
 
 pub struct StreamEntities {
     pub mkt_feed_producer: Producer<NoDedup>,

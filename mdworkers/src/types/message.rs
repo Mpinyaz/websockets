@@ -55,7 +55,140 @@ pub struct ResponseDetails {
     pub message: String,
 }
 
-/// Forex quote data
+/// Alpaca WebSocket Message (generic wrapper)
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "T")]
+pub enum AlpacaMessage {
+    #[serde(rename = "success")]
+    Success(AlpacaControl),
+    #[serde(rename = "error")]
+    Error(AlpacaControl),
+    #[serde(rename = "subscription")]
+    Subscription(AlpacaSubscriptionStatus),
+    #[serde(rename = "t")]
+    Trade(AlpacaTrade),
+    #[serde(rename = "q")]
+    Quote(AlpacaQuote),
+    #[serde(rename = "b")]
+    Bar(AlpacaBar),
+    #[serde(rename = "d")]
+    DailyBar(Value),
+    #[serde(rename = "u")]
+    UpdatedBar(Value),
+    #[serde(rename = "c")]
+    Correction(Value),
+    #[serde(rename = "x")]
+    Cancel(Value),
+    #[serde(rename = "l")]
+    Luld(Value),
+    #[serde(rename = "s")]
+    Status(Value),
+    #[serde(rename = "i")]
+    Imbalance(Value),
+    #[serde(rename = "h")]
+    Heartbeat(Value),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AlpacaControl {
+    pub msg: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code: Option<i32>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AlpacaSubscriptionStatus {
+    pub trades: Vec<String>,
+    pub quotes: Vec<String>,
+    pub bars: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AlpacaTrade {
+    #[serde(rename = "S")]
+    pub symbol: String,
+    #[serde(rename = "p")]
+    pub price: f64,
+    #[serde(rename = "s")]
+    pub size: f64,
+    #[serde(rename = "t")]
+    pub ts: String,
+    #[serde(rename = "i")]
+    pub trade_id: u64,
+    #[serde(rename = "x")]
+    pub exchange: String,
+    #[serde(rename = "z")]
+    pub tape: String,
+    #[serde(rename = "c")]
+    pub conditions: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AlpacaQuote {
+    #[serde(rename = "S")]
+    pub symbol: String,
+    #[serde(rename = "bp")]
+    pub bid_price: f64,
+    #[serde(rename = "bs")]
+    pub bid_size: f64,
+    #[serde(rename = "ap")]
+    pub ask_price: f64,
+    #[serde(rename = "as")]
+    pub ask_size: f64,
+    #[serde(rename = "t")]
+    pub ts: String,
+    #[serde(rename = "bx")]
+    pub bid_exchange: String,
+    #[serde(rename = "ax")]
+    pub ask_exchange: String,
+    #[serde(rename = "c")]
+    pub conditions: Vec<String>,
+    #[serde(rename = "z")]
+    pub tape: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AlpacaBar {
+    #[serde(rename = "S")]
+    pub symbol: String,
+    #[serde(rename = "o")]
+    pub open: f64,
+    #[serde(rename = "h")]
+    pub high: f64,
+    #[serde(rename = "l")]
+    pub low: f64,
+    #[serde(rename = "c")]
+    pub close: f64,
+    #[serde(rename = "v")]
+    pub volume: f64,
+    #[serde(rename = "t")]
+    pub ts: String,
+    #[serde(rename = "n")]
+    pub trade_count: u64,
+    #[serde(rename = "vw")]
+    pub vwap: f64,
+}
+
+/// "Authorization"
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AlpacaAuthRequest {
+    pub action: String,
+    pub key: String,
+    pub secret: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AlpacaSubscribeRequest {
+    pub action: String, // "subscribe"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trades: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quotes: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bars: Option<Vec<String>>,
+}
+
+/// Mkt quote data
 /// Array format: [type, ticker, timestamp, bidSize, bidPrice, midPrice, askSize, askPrice]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]

@@ -1,5 +1,4 @@
-use crate::models::{AnalyzeRequest, AnalyzeResponse, ApiError, AssetClass, JobEvent};
-use crate::AppState;
+use crate::types::{AnalyzeRequest, AnalyzeResponse, ApiError, AssetClass, JobEvent, WebAppState};
 use axum::Json;
 use axum::{
     extract::{Path, State},
@@ -31,7 +30,7 @@ pub async fn submit_job() -> Result<Json<serde_json::Value>, ApiError> {
 
 pub async fn sse_handler(
     Path(job_id): Path<String>,
-    State(state): State<AppState>,
+    State(state): State<WebAppState>,
     Json(payload): Json<AnalyzeRequest>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     info!("SSE handler started for job: {}", job_id); // Added this line
@@ -116,7 +115,7 @@ async fn store_job_result(
 async fn handle_analyze(
     tx: broadcast::Sender<JobEvent>,
     payload: AnalyzeRequest,
-    state: AppState,
+    state: WebAppState,
     job_id: String,
 ) -> Result<(), ApiError> {
     info!("Handling analysis for job: {}", job_id);
@@ -180,7 +179,7 @@ async fn fetch_and_process_data(
 
     let query = format!(
         "SELECT * FROM {} WHERE {}",
-        payload.asset_class, ticker_filter
+        payload.asset_class.measurement(), ticker_filter
     );
 
     // info!("Executing InfluxDB query: {}", query_string); // Debug log
@@ -194,7 +193,9 @@ async fn fetch_and_process_data(
         AssetClass::Forex => {
             json_to_dataframe(&raw_data, &["bid_price", "ask_price", "mid_price"])?
         }
-        AssetClass::Equity => todo!(),
+        AssetClass::Equity => {
+            json_to_dataframe(&raw_data, &["lastPrice", "midPrice", "volume", "lastSize"])?
+        }
     };
 
     if df.height() == 0 {
@@ -207,23 +208,19 @@ async fn fetch_and_process_data(
 
     let aggregated_df = df
         .lazy()
+        .with_column(
+            match payload.asset_class {
+                AssetClass::Equity => coalesce(&[col("lastPrice"), col("midPrice")]).alias("price"),
+                AssetClass::Crypto => col("last_price").alias("price"),
+                AssetClass::Forex => col("mid_price").alias("price"),
+            }
+        )
         .group_by([col("ticker")])
         .agg([
             col("time").min().alias("start_time"),
             col("time").max().alias("end_time"),
-            // Conditional aggregation based on asset class
-            if payload.asset_class == AssetClass::Crypto {
-                // Compare with enum variant
-                col("last_price").count().alias("data_points")
-            } else {
-                col("mid_price").count().alias("data_points")
-            },
-            if payload.asset_class == AssetClass::Crypto {
-                // Compare with enum variant
-                col("last_price").mean().alias("avg_price")
-            } else {
-                col("mid_price").mean().alias("avg_mid")
-            },
+            col("price").count().alias("data_points"),
+            col("price").mean().alias("avg_price"),
         ])
         .collect()?;
 

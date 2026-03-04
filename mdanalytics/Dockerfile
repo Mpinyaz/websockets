@@ -9,7 +9,7 @@ COPY Cargo.toml Cargo.lock ./
 # Cache dependencies with dummy binaries for all explicit and implicit binaries
 RUN mkdir -p src && \
     echo "fn main() {}" > src/main.rs && \
-    echo "fn main() {}" > src/mdwstui.rs
+    echo "fn main() {}" > src/tui.rs
 RUN cargo build --release
 RUN rm -rf src
 
@@ -25,5 +25,5 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/target/release/mdanalytics .
-COPY --from=build /app/target/release/cli .
+COPY --from=build /app/target/release/tui .
 CMD ["./mdanalytics"]

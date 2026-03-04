@@ -1,9 +1,11 @@
-use crate::{config::cfg::Config, types::assetclass::AssetClass};
+use crate::{config::Config, types::assetclass::AssetClass};
 use anyhow::Result;
+use futures_util::SinkExt;
 use std::error::Error;
 use std::fmt;
 use tokio::net::TcpStream;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
+use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use tracing::{error, info};
 
 pub type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -41,10 +43,13 @@ impl Error for ClientError {}
 
 impl Client {
     pub async fn connect(cfg: &Config, ac: AssetClass) -> Result<WsStream, ClientError> {
-        let url = format!("{}/{}", cfg.data_url, ac);
+        let url = match ac {
+            AssetClass::Crypto | AssetClass::Forex => format!("{}/{}", cfg.data_url, ac),
+            AssetClass::Equity => cfg.alpaca_url.clone(),
+        };
         info!("Connecting to WebSocket at: {}", url);
 
-        let (ws_stream, response) = connect_async(&url)
+        let (mut ws_stream, response) = connect_async(&url)
             .await
             .map_err(|err| ClientError::ConnectionFailed(err.to_string()))?;
 
@@ -53,6 +58,22 @@ impl Client {
             ac,
             response.status()
         );
+
+        if ac == AssetClass::Equity {
+            info!("Sending Alpaca auth payload for Equity connection");
+            let auth_payload = serde_json::json!({
+                "action": "auth",
+                "key": cfg.alpaca_key,
+                "secret": cfg.alpaca_secret
+            });
+
+            ws_stream
+                .send(Message::Text(auth_payload.to_string().into()))
+                .await
+                .map_err(|err| {
+                    ClientError::ConnectionFailed(format!("Failed to send auth: {}", err))
+                })?;
+        }
 
         Ok(ws_stream)
     }

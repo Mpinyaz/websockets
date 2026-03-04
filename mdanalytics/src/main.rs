@@ -1,12 +1,12 @@
 pub mod api;
 pub mod types;
 pub mod utils;
-use crate::{
-    types::AppState,
-    utils::{init_redis_conn, init_tracing, AppConfig},
-};
+use crate::utils::init_redis_conn;
+use crate::utils::init_tracing;
+use crate::utils::AppConfig;
 use axum::{routing::post, Router};
 use influxdb::Client;
+use crate::types::WebAppState;
 use redis::aio::ConnectionManager;
 use tower_http::trace::TraceLayer;
 use tracing::info;
@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("Failed to connect to Redis");
     info!("Succesfully connected to redis client: {}", &cfg.redis_url);
 
-    let state = AppState { db: client, redis };
+    let state = WebAppState { db: client, redis };
 
     let app = Router::new()
         .route("/submit/job", post(api::submit_job))
