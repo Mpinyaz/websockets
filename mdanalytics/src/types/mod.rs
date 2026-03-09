@@ -23,7 +23,6 @@ pub enum JobEvent {
     Failed { error: String },
 }
 
-// New AssetClass enum for validation
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum AssetClass {
@@ -35,7 +34,7 @@ pub enum AssetClass {
 impl AssetClass {
     pub fn measurement(&self) -> &'static str {
         match self {
-            AssetClass::Crypto => "crypto_data",
+            AssetClass::Crypto => "crypto",
             AssetClass::Forex => "forex",
             AssetClass::Equity => "equity",
         }

@@ -200,6 +200,11 @@ func handleMktUpdate(
 		return
 	}
 
+	// Normalize Service field to "crypto" if it comes as "crypto_data"
+	if payload.Service == "crypto_data" {
+		payload.Service = "crypto"
+	}
+
 	var eventPayload interface{} // Will hold parsed data for Event
 	var assetClass string        // Holds the asset class for market data updates
 
@@ -218,7 +223,7 @@ func handleMktUpdate(
 
 	case "A": // Actual market update
 		// Tiingo still uses arrays for FX and Crypto
-		if payload.Service == "fx" || payload.Service == "crypto_data" {
+		if payload.Service == "fx" || payload.Service == "crypto" {
 			var arr []interface{}
 			if err := json.Unmarshal(payload.Data, &arr); err != nil {
 				log.Printf("expected array payload for service=%s, got %s", payload.Service, string(payload.Data))
@@ -235,14 +240,14 @@ func handleMktUpdate(
 				eventPayload = fx
 				assetClass = "forex"
 
-			case "crypto_data":
+			case "crypto":
 				var c TiingoCryptoData
 				if err := parseCryptoArray(arr, &c); err != nil {
 					log.Printf("Crypto parse error: %v", err)
 					return
 				}
 				eventPayload = c
-				assetClass = "crypto_data"
+				assetClass = "crypto"
 			}
 		} else if payload.Service == "alpaca-iex" {
 			var eq EquityUpdate
@@ -298,7 +303,7 @@ func handleMktUpdate(
 				timestamp = parsedTime
 			}
 		case TiingoCryptoData:
-			measurement = "crypto_data"
+			measurement = "crypto"
 			tags["ticker"] = v.Ticker
 			tags["exchange"] = v.Exchange
 			tags["update_type"] = v.UpdateType

@@ -11,12 +11,12 @@ use mdanalytics::dataframe_to_json_value;
 use mdanalytics::json_to_dataframe;
 use polars::prelude::*;
 use redis::AsyncCommands;
-use serde_json::Value; // Added this line back
+use serde_json::Value;
 use snowflake_me::Snowflake;
 use std::{convert::Infallible, time::Duration};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
-use tracing::info;
+use tracing::{error, info};
 
 pub async fn submit_job() -> Result<Json<serde_json::Value>, ApiError> {
     let sf = Snowflake::new()?;
@@ -38,9 +38,7 @@ pub async fn sse_handler(
     tokio::spawn(async move {
         // Clone AppState for the spawned task
         if let Err(e) = handle_analyze(tx.clone(), payload, state.clone(), job_id.clone()).await {
-            // job_id.clone() added
-            eprintln!("Error in handle_analyze for job {}: {:?}", job_id, e);
-            // Optionally, send a failed event to the client
+            error!("Error in handle_analyze for job {}: {:?}", job_id, e);
             tx.send(JobEvent::Failed {
                 error: format!("Analysis failed: {}", e),
             })
@@ -50,7 +48,6 @@ pub async fn sse_handler(
 
     let stream = BroadcastStream::new(rx).filter_map(|msg| {
         future::ready(match msg {
-            // Wrapped in future::ready
             Ok(event) => {
                 let name = match &event {
                     JobEvent::Processing => "processing",
@@ -59,8 +56,12 @@ pub async fn sse_handler(
                 };
                 let json_data = match &event {
                     JobEvent::Processing => serde_json::json!({"status": "processing"}),
-                    JobEvent::Completed { result } => serde_json::json!({"status": "completed", "result": result}),
-                    JobEvent::Failed { error } => serde_json::json!({"status": "failed", "error": error}),
+                    JobEvent::Completed { result } => {
+                        serde_json::json!({"status": "completed", "result": result})
+                    }
+                    JobEvent::Failed { error } => {
+                        serde_json::json!({"status": "failed", "error": error})
+                    }
                 };
                 let data = serde_json::to_string(&json_data).unwrap();
                 Some(Ok(Event::default().event(name).data(data)))
@@ -179,7 +180,8 @@ async fn fetch_and_process_data(
 
     let query = format!(
         "SELECT * FROM {} WHERE {}",
-        payload.asset_class.measurement(), ticker_filter
+        payload.asset_class.measurement(),
+        ticker_filter
     );
 
     // info!("Executing InfluxDB query: {}", query_string); // Debug log
@@ -208,13 +210,11 @@ async fn fetch_and_process_data(
 
     let aggregated_df = df
         .lazy()
-        .with_column(
-            match payload.asset_class {
-                AssetClass::Equity => coalesce(&[col("lastPrice"), col("midPrice")]).alias("price"),
-                AssetClass::Crypto => col("last_price").alias("price"),
-                AssetClass::Forex => col("mid_price").alias("price"),
-            }
-        )
+        .with_column(match payload.asset_class {
+            AssetClass::Equity => coalesce(&[col("lastPrice"), col("midPrice")]).alias("price"),
+            AssetClass::Crypto => col("last_price").alias("price"),
+            AssetClass::Forex => col("mid_price").alias("price"),
+        })
         .group_by([col("ticker")])
         .agg([
             col("time").min().alias("start_time"),
@@ -234,7 +234,7 @@ async fn fetch_and_process_data(
 
     Ok(AnalyzeResponse {
         job_id: "".to_string(),
-        asset_class: payload.asset_class.to_string(), // Convert AssetClass back to String
+        asset_class: payload.asset_class.to_string(),
         data: data_vec,
     })
 }

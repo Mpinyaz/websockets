@@ -18,6 +18,8 @@ pub struct StreamEntities {
 }
 
 static STREAM_ENTITIES: OnceCell<StreamEntities> = OnceCell::const_new();
+const MAX_RETRIES: u32 = 5;
+const RETRY_DELAY_SECS: u64 = 5;
 
 pub async fn get_stream_entities() -> Result<&'static StreamEntities> {
     STREAM_ENTITIES.get_or_try_init(init_stream_entities).await
@@ -34,21 +36,23 @@ async fn init_stream_entities() -> Result<StreamEntities> {
         .build()
         .await?;
 
-    // Market data stream
+    //------------------------------------------------------------------//
+    //                          Market Updates                          //
+    //------------------------------------------------------------------//
     let updates_env = environment
         .stream_creator()
         .max_length(ByteCapacity::GB(5))
         .max_age(std::time::Duration::from_secs(3600 * 24 * 7));
     init_stream(updates_env, &config.feed_stream).await?;
+    //------------------------------------------------------------------//
+    //                       Market Subscriptions                       //
+    //------------------------------------------------------------------//
 
     let subscribe_env = environment
         .stream_creator()
         .max_length(ByteCapacity::GB(2))
         .max_age(std::time::Duration::from_secs(3600 * 24 * 3));
     init_stream(subscribe_env, &config.subscribe_stream).await?;
-
-    const MAX_RETRIES: u32 = 5;
-    const RETRY_DELAY_SECS: u64 = 5;
 
     for attempt in 1..=MAX_RETRIES {
         info!("Creating producers, attempt {}/{}", attempt, MAX_RETRIES);
