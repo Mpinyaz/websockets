@@ -387,7 +387,6 @@ async fn process_text_message(text: String, asset_class: AssetClass) -> Result<(
         // Tiingo message processing
         if let Ok(ws_response) = serde_json::from_str::<WsResponse>(&text) {
             if ws_response.message_type == "A" {
-                info!("🔥 Raw Tiingo {:?} data: {}", asset_class, text);
                 info!(
                     "Processing {:?} data message: {:?}",
                     asset_class, ws_response
