@@ -1,7 +1,8 @@
 use crate::streams::create_sub_consumer;
-use crate::types::{assetclass::AssetClass, message::MsgError};
+use crate::types::message::MsgError;
 use crate::ws::{WsChannels, WsCommand};
 use futures_util::StreamExt;
+use mdcore::AssetClass;
 use serde::Deserialize;
 use tracing::{error, info};
 

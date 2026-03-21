@@ -1,7 +1,7 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use influxdb::Client;
-use mdworkers::types::AssetClass;
+use mdcore::AssetClass;
 use polars::error::PolarsError;
 use redis::RedisError;
 use redis::aio::ConnectionManager;
@@ -10,7 +10,6 @@ use serde_json::Error as SerdeJsonError;
 use serde_json::Value;
 use snowflake_me::Error as SnowflakeError;
 
-use color_eyre::eyre::Result;
 use ratatui::prelude::*;
 use ratatui::widgets::TableState;
 use std::collections::HashMap;

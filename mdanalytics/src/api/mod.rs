@@ -1,4 +1,4 @@
-use crate::types::{AnalyzeRequest, AnalyzeResponse, ApiError, AssetClass, JobEvent, WebAppState};
+use crate::types::{AnalyzeRequest, AnalyzeResponse, ApiError, JobEvent, WebAppState};
 use axum::Json;
 use axum::{
     extract::{Path, State},
@@ -9,6 +9,7 @@ use futures_util::stream::{Stream, StreamExt};
 use influxdb::ReadQuery;
 use mdanalytics::dataframe_to_json_value;
 use mdanalytics::json_to_dataframe;
+use mdcore::AssetClass;
 use polars::prelude::*;
 use redis::AsyncCommands;
 use serde_json::Value;

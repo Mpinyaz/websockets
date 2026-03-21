@@ -1,6 +1,7 @@
-use crate::{config::Config, types::assetclass::AssetClass};
+use crate::config::Config;
 use anyhow::Result;
 use futures_util::SinkExt;
+use mdcore::AssetClass;
 use std::error::Error;
 use std::fmt;
 use tokio::net::TcpStream;

@@ -12,7 +12,8 @@ use mdanalytics::types::AppMessage;
 use mdanalytics::types::ManageAction;
 use mdanalytics::types::TuiApp;
 use mdanalytics::types::WsResponse;
-use mdanalytics::types::{AssetClass, ConfirmationPayload, MarketUpdate, Payload};
+use mdanalytics::types::{ConfirmationPayload, MarketUpdate, Payload};
+use mdcore::AssetClass;
 use ratatui::{
     prelude::*,
     style::Stylize,

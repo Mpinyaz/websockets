@@ -1,10 +1,10 @@
 use crate::config::Config;
 use crate::types::{
-    assetclass::AssetClass,
     client::{Client, WsStream},
     message::{AlpacaMessage, MsgError, SubscribeData, SubscribeRequest, WsResponse},
 };
 use futures_util::{SinkExt, StreamExt};
+use mdcore::AssetClass;
 use serde_json::{self, Value};
 use std::collections::HashSet;
 use tokio::sync::mpsc;
