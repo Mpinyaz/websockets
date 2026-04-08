@@ -1,7 +1,9 @@
 import { StrictMode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
-
+import { useMarketSocket } from '@hooks/useMarketWs'
+import type { MarketSocket } from '@hooks/useMarketWs'
+import { Link } from 'lucide-react'
 // Import the generated route tree
 import { routeTree } from './routeTree.gen'
 
@@ -10,9 +12,7 @@ import reportWebVitals from './reportWebVitals.ts'
 import { MarketSocketProvider } from './context/MktSocketCtx.tsx'
 import { TickerProvider } from './context/TickersCtx.tsx'
 
-import { useMarketSocket } from '@hooks/useMarketWs'
-import type { MarketSocket } from '@hooks/useMarketWs'
-import { Link } from 'lucide-react'
+
 
 export interface RouterContext {
   socket: MarketSocket
