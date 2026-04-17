@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-chrono = "0.4.44"
+chrono = { version = "0.4.44", features = ["serde"] }
 rust_decimal = "1.40.0"
 serde = "1.0.228"
 serde_json = "1.0.149"
@@ -12,3 +12,4 @@ tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
 mdcore = { path = "../mdcore" }
 tokio = { version = "1.50.0", features = ["sync"] }
+rust_decimal_macros = "1.40.0"
