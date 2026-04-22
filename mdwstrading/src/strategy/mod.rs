@@ -1,4 +1,4 @@
-use crate::data::MarketSnapshot;
+use crate::data::pricing::MarketSnapshot;
 use crate::Asset;
 use rust_decimal::Decimal;
 use std::collections::HashMap;

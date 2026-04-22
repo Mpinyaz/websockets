@@ -12,3 +12,4 @@ market_data_ws_architecture.md
 target
 ws-server/mdws
 /mdanalytics/target
+*.pem
