@@ -1,3 +1,4 @@
+pub mod allocator;
 use crate::data::pricing::MarketSnapshot;
 use crate::Asset;
 use rust_decimal::Decimal;
