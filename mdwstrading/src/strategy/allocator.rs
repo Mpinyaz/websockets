@@ -1,5 +1,5 @@
-use crate::AssetClass;
 use crate::{data::pricing::MarketSnapshot, Asset};
+use mdcore::AssetClass;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use std::collections::HashMap;

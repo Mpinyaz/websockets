@@ -1,5 +1,6 @@
 pub mod data;
 pub mod portfolio;
+pub mod risk;
 pub mod strategy;
 use chrono::{DateTime, Utc};
 use mdcore::AssetClass;

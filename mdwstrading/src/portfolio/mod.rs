@@ -1,9 +1,7 @@
 pub mod leveraged;
-use rust_decimal::Decimal;
-use std::{collections::HashMap, hash::Hash};
-
 use crate::Position;
-
+use rust_decimal::Decimal;
+use std::collections::HashMap;
 pub struct Portfolio {
     pub cash: HashMap<String, Decimal>,
     pub positions: HashMap<String, Position>,

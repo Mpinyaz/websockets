@@ -69,6 +69,20 @@ services:
     networks:
       - app-network
 
+  mdwstrading:
+    build:
+      context: .
+      dockerfile: mdwstrading/Dockerfile
+    container_name: mdws_trading
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
+
   redis:
     image: redis:8.2-alpine
     container_name: redis-standalone
